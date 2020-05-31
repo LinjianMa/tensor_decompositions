@@ -7,48 +7,49 @@ try:
 except ImportError:
     import queue
 
+
 @six.add_metaclass(abc.ABCMeta)
 class DTALS_base():
-
-    def __init__(self,tenpy,T,A):
+    def __init__(self, tenpy, T, A):
         self.tenpy = tenpy
         self.T = T
         self.A = A
         self.R = A[0].shape[1]
 
     @abc.abstractmethod
-    def _einstr_builder(self,M,s,ii):
+    def _einstr_builder(self, M, s, ii):
         return
 
     @abc.abstractmethod
-    def _solve(self,i,Regu,s):
+    def _solve(self, i, Regu, s):
         return
 
-    def step(self,Regu):
+    def step(self, Regu):
         q = queue.Queue()
         for i in range(len(self.A)):
             q.put(i)
-        s = [(list(range(len(self.A))),self.T)]
+        s = [(list(range(len(self.A))), self.T)]
         while not q.empty():
             i = q.get()
             while i not in s[-1][0]:
                 s.pop()
-                assert(len(s) >= 1)
+                assert (len(s) >= 1)
             while len(s[-1][0]) != 1:
                 M = s[-1][1]
                 idx = s[-1][0].index(i)
-                ii = len(s[-1][0])-1
-                if idx == len(s[-1][0])-1:
-                    ii = len(s[-1][0])-2
+                ii = len(s[-1][0]) - 1
+                if idx == len(s[-1][0]) - 1:
+                    ii = len(s[-1][0]) - 2
 
-                einstr = self._einstr_builder(M,s,ii)
-                N = self.tenpy.einsum(einstr,M,self.A[ii])
+                einstr = self._einstr_builder(M, s, ii)
+                N = self.tenpy.einsum(einstr, M, self.A[ii])
 
                 ss = s[-1][0][:]
                 ss.remove(ii)
-                s.append((ss,N))
-            self.A[i] = self._solve(i,Regu,s)
+                s.append((ss, N))
+            self.A[i] = self._solve(i, Regu, s)
         return self.A
+
 
 @six.add_metaclass(abc.ABCMeta)
 class PPALS_base():
@@ -66,8 +67,7 @@ class PPALS_base():
         Linjian Ma and Edgar Solomonik; Accelerating Alternating Least Squares for Tensor Decomposition
         by Pairwise Perturbation; arXiv:1811.10573 [math.NA], November 2018.
     """
-
-    def __init__(self,tenpy,T,A,args):
+    def __init__(self, tenpy, T, A, args):
 
         self.tenpy = tenpy
         self.T = T
@@ -76,18 +76,19 @@ class PPALS_base():
         self.pp = False
         self.reinitialize_tree = False
         self.tol_restart_dt = args.tol_restart_dt
-        self.tree = { '0':(list(range(len(self.A))),self.T) }
+        self.tree = {'0': (list(range(len(self.A))), self.T)}
         self.order = len(A)
         self.dA = []
         for i in range(self.order):
-            self.dA.append(tenpy.zeros((self.A[i].shape[0],self.A[i].shape[1])))
+            self.dA.append(
+                tenpy.zeros((self.A[i].shape[0], self.A[i].shape[1])))
 
     @abc.abstractmethod
-    def _step_dt(self,Regu):
+    def _step_dt(self, Regu):
         return
 
     @abc.abstractmethod
-    def _solve_PP(self,i,Regu,N):
+    def _solve_PP(self, i, Regu, N):
         return
 
     @abc.abstractmethod
@@ -125,7 +126,7 @@ class PPALS_base():
         """
         if len(nodeindex) == self.order:
             return '0'
-        return "".join([chr(ord('a')+j) for j in nodeindex])
+        return "".join([chr(ord('a') + j) for j in nodeindex])
 
     def _get_parentnode(self, nodeindex):
         """Get the parent node based on current node index
@@ -142,9 +143,9 @@ class PPALS_base():
         fulllist = np.array(range(self.order))
 
         comp_index = np.setdiff1d(fulllist, nodeindex)
-        comp_parent_index = comp_index[1:] #comp_index[:-1]
+        comp_parent_index = comp_index[1:]  #comp_index[:-1]
 
-        contract_index = comp_index[0] #comp_index[-1]
+        contract_index = comp_index[0]  #comp_index[-1]
         parent_index = np.setdiff1d(fulllist, comp_parent_index)
         parent_nodename = self._get_nodename(parent_index)
 
@@ -158,35 +159,38 @@ class PPALS_base():
 
         """
         nodename = self._get_nodename(nodeindex)
-        parent_nodename, parent_nodeindex, contract_index = self._get_parentnode(nodeindex)
-        einstr = self._get_einstr(nodeindex,parent_nodeindex,contract_index)
+        parent_nodename, parent_nodeindex, contract_index = self._get_parentnode(
+            nodeindex)
+        einstr = self._get_einstr(nodeindex, parent_nodeindex, contract_index)
 
         if not parent_nodename in self.tree:
             self._initialize_treenode(parent_nodeindex)
 
         # t0 = time.time()
-        N = self.tenpy.einsum(einstr,self.tree[parent_nodename][1],self.A[contract_index])
+        N = self.tenpy.einsum(einstr, self.tree[parent_nodename][1],
+                              self.A[contract_index])
         # t1 = time.time()
-        self.tree[nodename] = (nodeindex,N)
+        self.tree[nodename] = (nodeindex, N)
         # self.tenpy.printf(einstr)
         # self.tenpy.printf("!!!!!!!! pairwise perturbation initialize tree took", t1-t0,"seconds")
 
     def _initialize_tree(self):
         """Initialize self.tree
         """
-        self.tree = { '0':(list(range(len(self.A))),self.T) }
+        self.tree = {'0': (list(range(len(self.A))), self.T)}
         self.dA = []
         for i in range(self.order):
-            self.dA.append(self.tenpy.zeros((self.A[i].shape[0],self.A[i].shape[1])))
+            self.dA.append(
+                self.tenpy.zeros((self.A[i].shape[0], self.A[i].shape[1])))
 
         for ii in range(0, self.order):
-            for jj in range(ii+1, self.order):
-                self._initialize_treenode(np.array([ii,jj]))
+            for jj in range(ii + 1, self.order):
+                self._initialize_treenode(np.array([ii, jj]))
 
         for ii in range(0, self.order):
             self._initialize_treenode(np.array([ii]))
 
-    def _step_pp_subroutine(self,Regu):
+    def _step_pp_subroutine(self, Regu):
         """Doing one step update based on pairwise perturbation
 
         Args:
@@ -202,21 +206,24 @@ class PPALS_base():
             N = self.tree[nodename][1][:]
 
             for j in range(i):
-                parentname = self._get_nodename(np.array([j,i]))
-                einstr = self._get_einstr(np.array([i]), np.array([j,i]), j)
-                N = N + self.tenpy.einsum(einstr,self.tree[parentname][1],self.dA[j])
-            for j in range(i+1, self.order):
-                parentname = self._get_nodename(np.array([i,j]))
-                einstr = self._get_einstr(np.array([i]), np.array([i,j]), j)
-                N = N + self.tenpy.einsum(einstr,self.tree[parentname][1],self.dA[j])
+                parentname = self._get_nodename(np.array([j, i]))
+                einstr = self._get_einstr(np.array([i]), np.array([j, i]), j)
+                N = N + self.tenpy.einsum(einstr, self.tree[parentname][1],
+                                          self.dA[j])
+            for j in range(i + 1, self.order):
+                parentname = self._get_nodename(np.array([i, j]))
+                einstr = self._get_einstr(np.array([i]), np.array([i, j]), j)
+                N = N + self.tenpy.einsum(einstr, self.tree[parentname][1],
+                                          self.dA[j])
 
-            output = self._solve_PP(i,Regu,N)
+            output = self._solve_PP(i, Regu, N)
             self.dA[i] = self.dA[i] + output - self.A[i]
             self.A[i] = output
 
         num_smallupdate = 0
         for i in range(self.order):
-            if self.tenpy.sum(self.dA[i]**2)**.5 / self.tenpy.sum(self.A[i]**2)**.5 > self.tol_restart_dt:
+            if self.tenpy.sum(self.dA[i]**2)**.5 / self.tenpy.sum(
+                    self.A[i]**2)**.5 > self.tol_restart_dt:
                 num_smallupdate += 1
 
         if num_smallupdate > 0:
@@ -225,8 +232,7 @@ class PPALS_base():
 
         return self.A
 
-
-    def _step_dt_subroutine(self,Regu):
+    def _step_dt_subroutine(self, Regu):
         """Doing one step update based on dimension tree
 
         Args:
@@ -241,7 +247,8 @@ class PPALS_base():
         num_smallupdate = 0
         for i in range(self.order):
             self.dA[i] = self.A[i] - A_prev[i]
-            if self.tenpy.sum(self.dA[i]**2)**.5 / self.tenpy.sum(self.A[i]**2)**.5 < self.tol_restart_dt:
+            if self.tenpy.sum(self.dA[i]**2)**.5 / self.tenpy.sum(
+                    self.A[i]**2)**.5 < self.tol_restart_dt:
                 num_smallupdate += 1
 
         if num_smallupdate == self.order:
@@ -249,7 +256,7 @@ class PPALS_base():
             self.reinitialize_tree = True
         return self.A
 
-    def step(self,Regu):
+    def step(self, Regu):
         """Doing one step update in the optimizer
 
         Args:
@@ -270,7 +277,10 @@ class PPALS_base():
             A = self._step_dt_subroutine(Regu)
         return A, restart
 
-TREENODE = collections.namedtuple('TREENODE',['indices_A','tensor','contract_types'])
+
+TREENODE = collections.namedtuple('TREENODE',
+                                  ['indices_A', 'tensor', 'contract_types'])
+
 
 @six.add_metaclass(abc.ABCMeta)
 class partialPP_ALS_base():
@@ -288,8 +298,7 @@ class partialPP_ALS_base():
 
 
     """
-
-    def __init__(self,tenpy,T,A,args):
+    def __init__(self, tenpy, T, A, args):
 
         self.tenpy = tenpy
         self.T = T
@@ -298,26 +307,24 @@ class partialPP_ALS_base():
         self.A = A[:]
         self.order = len(self.A)
         for i in range(self.order):
-            self.dA.append(tenpy.zeros((A[i].shape[0],A[i].shape[1])))
+            self.dA.append(tenpy.zeros((A[i].shape[0], A[i].shape[1])))
 
         self.pp = False
         self.reinitialize_tree = False
         self.tol_restart_dt = args.tol_restart_dt
 
-        self.tree = {'0': TREENODE(list(range(len(A))), self.T, []) }
+        self.tree = {'0': TREENODE(list(range(len(A))), self.T, [])}
 
         self.init_keys = []
-
 
         self.fulllist = np.array(range(self.order))
 
         self.contract_types = []
         for i in range(3):
-            self.contract_types.append(['A' for i in range(self.order-1)])
+            self.contract_types.append(['A' for i in range(self.order - 1)])
         self.contract_types[0][-1] = 'A0'
-        self.contract_types[1][-2:] = ['A0','dA']
-        self.contract_types[2][-3:] = ['A0','dA','dA']
-
+        self.contract_types[1][-2:] = ['A0', 'dA']
+        self.contract_types[2][-3:] = ['A0', 'dA', 'dA']
 
     def _select_A(self, name='A'):
         if name == 'A':
@@ -328,11 +335,11 @@ class partialPP_ALS_base():
             return self.dA
 
     @abc.abstractmethod
-    def _step_dt(self,Regu):
+    def _step_dt(self, Regu):
         return
 
     @abc.abstractmethod
-    def _solve_PP(self,i,Regu,N):
+    def _solve_PP(self, i, Regu, N):
         return
 
     @abc.abstractmethod
@@ -370,9 +377,9 @@ class partialPP_ALS_base():
         """
         if len(nodeindex) == self.order:
             return '0'
-        index_name = "".join([chr(ord('a')+j) for j in nodeindex])
+        index_name = "".join([chr(ord('a') + j) for j in nodeindex])
         contract_name = "".join(contract_types)
-        return "-".join([index_name,contract_name])
+        return "-".join([index_name, contract_name])
 
     def _get_parentnode(self, nodeindex, contract_types):
         """Get the parent node based on current node index
@@ -389,17 +396,19 @@ class partialPP_ALS_base():
         comp_index = np.setdiff1d(self.fulllist, nodeindex)
 
         if contract_types[0] != 'A0' or len(contract_types) == 1:
-            contract_index = comp_index[0] #comp_index[-1]
-            comp_parent_index = comp_index[1:] #comp_index[:-1]
+            contract_index = comp_index[0]  #comp_index[-1]
+            comp_parent_index = comp_index[1:]  #comp_index[:-1]
             parent_index = np.setdiff1d(self.fulllist, comp_parent_index)
-            parent_nodename = self._get_nodename(parent_index, contract_types[1:])
+            parent_nodename = self._get_nodename(parent_index,
+                                                 contract_types[1:])
             matrix_contract_type = contract_types[0]
             parent_contract_types = contract_types[1:]
         else:
-            contract_index = comp_index[1] #comp_index[-1]
-            comp_parent_index = np.delete(comp_index, 1, 0) #comp_index[:-1]
+            contract_index = comp_index[1]  #comp_index[-1]
+            comp_parent_index = np.delete(comp_index, 1, 0)  #comp_index[:-1]
             parent_index = np.setdiff1d(self.fulllist, comp_parent_index)
-            parent_nodename = self._get_nodename(parent_index, np.delete(contract_types, 1, 0))
+            parent_nodename = self._get_nodename(
+                parent_index, np.delete(contract_types, 1, 0))
             matrix_contract_type = contract_types[1]
             parent_contract_types = np.delete(contract_types, 1, 0)
 
@@ -413,32 +422,37 @@ class partialPP_ALS_base():
 
         """
         nodename = self._get_nodename(nodeindex, contract_types)
-        parent_nodename, parent_nodeindex, parent_contract_types, matrix_contract_index, matrix_contract_type = self._get_parentnode(nodeindex, contract_types)
-        einstr = self._get_einstr(nodeindex, parent_nodeindex, matrix_contract_index)
+        parent_nodename, parent_nodeindex, parent_contract_types, matrix_contract_index, matrix_contract_type = self._get_parentnode(
+            nodeindex, contract_types)
+        einstr = self._get_einstr(nodeindex, parent_nodeindex,
+                                  matrix_contract_index)
 
         if not parent_nodename in self.tree:
             self._initialize_treenode(parent_nodeindex, parent_contract_types)
 
-        contract_matrix = self._select_A(matrix_contract_type)[matrix_contract_index]
-        N = self.tenpy.einsum(einstr, self.tree[parent_nodename].tensor, contract_matrix)
+        contract_matrix = self._select_A(
+            matrix_contract_type)[matrix_contract_index]
+        N = self.tenpy.einsum(einstr, self.tree[parent_nodename].tensor,
+                              contract_matrix)
         self.tree[nodename] = TREENODE(nodeindex, N, contract_types)
 
     def _initialize_tree(self):
         """Initialize self.tree
         """
-        self.tree = {'0': TREENODE(list(range(len(self.A))), self.T, []) }
+        self.tree = {'0': TREENODE(list(range(len(self.A))), self.T, [])}
         self.A0 = self.A[:]
         self.dA = []
         for i in range(self.order):
-            self.dA.append(self.tenpy.zeros((self.A[i].shape[0],self.A[i].shape[1])))
+            self.dA.append(
+                self.tenpy.zeros((self.A[i].shape[0], self.A[i].shape[1])))
 
-        for ii in range(self.order-3, self.order):
+        for ii in range(self.order - 3, self.order):
             nodeindex = np.setdiff1d(self.fulllist, [ii])
             self._initialize_treenode(np.array(nodeindex), ['A0'])
 
         self.init_keys = self.tree.keys()
 
-    def _step_pp_subroutine(self,Regu):
+    def _step_pp_subroutine(self, Regu):
         """Doing one step update based on pairwise perturbation
 
         Args:
@@ -451,28 +465,32 @@ class partialPP_ALS_base():
         self.tree = {k: self.tree[k] for k in self.init_keys}
         print("***** partial pairwise perturbation step *****")
 
-        for i in range(self.order-3):
-            N = self.tenpy.zeros((self.A[i].shape[0],self.A[i].shape[1]))
+        for i in range(self.order - 3):
+            N = self.tenpy.zeros((self.A[i].shape[0], self.A[i].shape[1]))
             for j in range(3):
-                self._initialize_treenode(np.array([i]), self.contract_types[j])
-                nodename = self._get_nodename(np.array([i]), self.contract_types[j])
+                self._initialize_treenode(np.array([i]),
+                                          self.contract_types[j])
+                nodename = self._get_nodename(np.array([i]),
+                                              self.contract_types[j])
                 N = N + self.tree[nodename].tensor
 
-            self.A[i] = self._solve_PP(i,Regu,N)
+            self.A[i] = self._solve_PP(i, Regu, N)
 
-        for i in range(self.order-3, self.order):
-            N = self.tenpy.zeros((self.A[i].shape[0],self.A[i].shape[1]))
+        for i in range(self.order - 3, self.order):
+            N = self.tenpy.zeros((self.A[i].shape[0], self.A[i].shape[1]))
             for j in range(2):
-                self._initialize_treenode(np.array([i]), self.contract_types[j])
-                nodename = self._get_nodename(np.array([i]), self.contract_types[j])
+                self._initialize_treenode(np.array([i]),
+                                          self.contract_types[j])
+                nodename = self._get_nodename(np.array([i]),
+                                              self.contract_types[j])
                 N = N + self.tree[nodename].tensor
 
-            output = self._solve_PP(i,Regu,N)
+            output = self._solve_PP(i, Regu, N)
             self.dA[i] = self.dA[i] + output - self.A[i]
             self.A[i] = output
 
         num_smallupdate = 0
-        for i in range(self.order-3, self.order):
+        for i in range(self.order - 3, self.order):
             if self.tenpy.sum(self.dA[i]**2)**.5 > self.tol_restart_dt:
                 num_smallupdate += 1
 
@@ -482,8 +500,7 @@ class partialPP_ALS_base():
 
         return self.A
 
-
-    def _step_dt_subroutine(self,Regu):
+    def _step_dt_subroutine(self, Regu):
         """Doing one step update based on dimension tree
 
         Args:
@@ -506,7 +523,7 @@ class partialPP_ALS_base():
             self.reinitialize_tree = True
         return self.A
 
-    def step(self,Regu):
+    def step(self, Regu):
         """Doing one step update in the optimizer
 
         Args:

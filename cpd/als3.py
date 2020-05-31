@@ -29,7 +29,7 @@ def solve_sys(tenpy, G, RHS):
     return out
 
 
-def transpose_w_copy(t, axis=(1,0), backend="hptt"):
+def transpose_w_copy(t, axis=(1, 0), backend="hptt"):
     t0 = time.time()
     if backend == "numpy":
         trans = np.transpose(t, axis).copy()
@@ -70,7 +70,8 @@ class als_optimizer():
         print(f"two dot take {time.time() - t0}")
         S = BB * CC
         self.A = (1 - lam) * self.A + lam * solve_sys(self.tenpy, S, T_B_C)
-        T_A_C = stacked_matvec(self.tenpy, transpose_w_copy(T_C, (0, 2, 1)), self.A)
+        T_A_C = stacked_matvec(self.tenpy, transpose_w_copy(T_C, (0, 2, 1)),
+                               self.A)
         t0 = time.time()
         AA = self.tenpy.dot(self.A, self.tenpy.transpose(self.A))
         print(f"dot takes {time.time() - t0}")
@@ -80,7 +81,8 @@ class als_optimizer():
         T_A = (self.A @ self.T_1).reshape(self.rank, self.shape[1],
                                           self.shape[2])
         print(f"T_A takes {time.time() - t0}")
-        T_A_B = stacked_matvec(self.tenpy, transpose_w_copy(T_A, (0, 2, 1)), self.B)
+        T_A_B = stacked_matvec(self.tenpy, transpose_w_copy(T_A, (0, 2, 1)),
+                               self.B)
         t0 = time.time()
         BB = self.tenpy.dot(self.B, self.tenpy.transpose(self.B))
         print(f"dot takes {time.time() - t0}")
@@ -137,7 +139,8 @@ class als_pp_optimizer(als_optimizer):
         self.regu = 1e-7 * tenpy.eye(A.shape[1])
         self.use_correction = args.use_correction
         if tenpy.name() == 'numpy':
-            self.T_2 = transpose_w_copy(T, (1, 0, 2)).reshape(self.shape[1], -1)
+            self.T_2 = transpose_w_copy(T,
+                                        (1, 0, 2)).reshape(self.shape[1], -1)
         if tenpy.name() == 'ctf':
             self.T_2 = ctf.transpose(T, (1, 0, 2))
 
@@ -200,12 +203,12 @@ class als_pp_optimizer(als_optimizer):
 
         t0 = time.time()
         smallupdates = True
-        norm_dA = self.tenpy.vecnorm(self.dA) #sum(self.dA**2)**.5
-        norm_dB = self.tenpy.vecnorm(self.dB) #sum(self.dB**2)**.5
-        norm_dC = self.tenpy.vecnorm(self.dC) #sum(self.dC**2)**.5
-        norm_A = self.tenpy.vecnorm(self.A) #sum(self.A**2)**.5
-        norm_B = self.tenpy.vecnorm(self.B) #sum(self.B**2)**.5
-        norm_C = self.tenpy.vecnorm(self.C) #sum(self.C**2)**.5
+        norm_dA = self.tenpy.vecnorm(self.dA)  #sum(self.dA**2)**.5
+        norm_dB = self.tenpy.vecnorm(self.dB)  #sum(self.dB**2)**.5
+        norm_dC = self.tenpy.vecnorm(self.dC)  #sum(self.dC**2)**.5
+        norm_A = self.tenpy.vecnorm(self.A)  #sum(self.A**2)**.5
+        norm_B = self.tenpy.vecnorm(self.B)  #sum(self.B**2)**.5
+        norm_C = self.tenpy.vecnorm(self.C)  #sum(self.C**2)**.5
         if norm_dA > self.tol_restart_dt * norm_A or norm_dB > self.tol_restart_dt * norm_B or norm_dC > self.tol_restart_dt * norm_C:
             smallupdates = False
 
@@ -216,15 +219,14 @@ class als_pp_optimizer(als_optimizer):
 
         return self.A, self.B, self.C
 
-
     def _step_pp_subroutine_numpy(self):
         lam = self.lam
 
         B_trans = transpose_w_copy(self.B)
         C_trans = transpose_w_copy(self.C)
         M1 = self.T_B0_C0 + stacked_matvec(self.tenpy, self.T_C0,
-                               self.dB) + stacked_matvec(
-                                   self.tenpy, self.T_B0, self.dC)
+                                           self.dB) + stacked_matvec(
+                                               self.tenpy, self.T_B0, self.dC)
         if self.use_correction:
             # correction step
             M1 += (self.dB @ B_trans) * (self.dC @ C_trans) @ self.A
@@ -249,7 +251,8 @@ class als_pp_optimizer(als_optimizer):
         self.B = B_new
 
         B_trans = transpose_w_copy(self.B)
-        M3 = self.T_A0_B0 + stacked_matvec(self.tenpy, self.T_A0_trans, self.dB) + stacked_matvec(
+        M3 = self.T_A0_B0 + stacked_matvec(
+            self.tenpy, self.T_A0_trans, self.dB) + stacked_matvec(
                 self.tenpy, self.T_B0_trans, self.dA)
         if self.use_correction:
             # correction step
@@ -260,19 +263,21 @@ class als_pp_optimizer(als_optimizer):
         self.dC = self.dC + C_new - self.C
         self.C = C_new
 
-
     def _step_pp_subroutine_ctf(self):
         lam = self.lam
 
         t_all = 0
         t0 = time.time()
-        M = self.T_B0_C0 + ctf.einsum("kab,kb->ka", self.T_C0, self.dB) + ctf.einsum("kab,kb->ka", self.T_B0, self.dC)
+        M = self.T_B0_C0 + ctf.einsum("kab,kb->ka", self.T_C0,
+                                      self.dB) + ctf.einsum(
+                                          "kab,kb->ka", self.T_B0, self.dC)
         t_all += time.time() - t0
         print(f"matvec 1 costs {time.time() - t0}")
         t0 = time.time()
         if self.use_correction:
             # correction step
-            M += ctf.einsum("ab,cb->ac", self.dB, self.B) * ctf.einsum("ab,cb->ac", self.dC, self.C) @ self.A
+            M += ctf.einsum("ab,cb->ac", self.dB, self.B) * ctf.einsum(
+                "ab,cb->ac", self.dC, self.C) @ self.A
         t_all += time.time() - t0
         print(f"correction 1 costs {time.time() - t0}")
         t0 = time.time()
@@ -292,13 +297,16 @@ class als_pp_optimizer(als_optimizer):
         print(f"Update takes {time.time() - t0}")
 
         t0 = time.time()
-        M = self.T_A0_C0 + ctf.einsum("kab,kb->ka", self.T_A0, self.dC) + ctf.einsum("kab,ka->kb", self.T_C0, self.dA)
+        M = self.T_A0_C0 + ctf.einsum("kab,kb->ka", self.T_A0,
+                                      self.dC) + ctf.einsum(
+                                          "kab,ka->kb", self.T_C0, self.dA)
         t_all += time.time() - t0
         print(f"matvec 2 costs {time.time() - t0}")
         t0 = time.time()
         if self.use_correction:
             # correction step
-            M += ctf.einsum("ab,cb->ac", self.dA, self.A) * ctf.einsum("ab,cb->ac", self.dC, self.C) @ self.B
+            M += ctf.einsum("ab,cb->ac", self.dA, self.A) * ctf.einsum(
+                "ab,cb->ac", self.dC, self.C) @ self.B
         t_all += time.time() - t0
         print(f"correction 2 costs {time.time() - t0}")
         t0 = time.time()
@@ -314,13 +322,16 @@ class als_pp_optimizer(als_optimizer):
         print(f"Update takes {time.time() - t0}")
 
         t0 = time.time()
-        M = self.T_A0_B0 + ctf.einsum("kab,ka->kb", self.T_A0, self.dB) + ctf.einsum("kab,ka->kb", self.T_B0, self.dA)
+        M = self.T_A0_B0 + ctf.einsum("kab,ka->kb", self.T_A0,
+                                      self.dB) + ctf.einsum(
+                                          "kab,ka->kb", self.T_B0, self.dA)
         t_all += time.time() - t0
         print(f"matvec 3 costs {time.time() - t0}")
         t0 = time.time()
         if self.use_correction:
             # correction step
-            M += ctf.einsum("ab,cb->ac", self.dA, self.A) * ctf.einsum("ab,cb->ac", self.dB, self.B) @ self.C
+            M += ctf.einsum("ab,cb->ac", self.dA, self.A) * ctf.einsum(
+                "ab,cb->ac", self.dB, self.B) @ self.C
         t_all += time.time() - t0
         print(f"correction 3 costs {time.time() - t0}")
         t0 = time.time()
@@ -335,7 +346,6 @@ class als_pp_optimizer(als_optimizer):
         t_all += time.time() - t0
         print(f"Update takes {time.time() - t0}")
         print(f"tall {t_all}")
-
 
     def _step_dt_subroutine(self):
         A_prev, B_prev, C_prev = self.A.copy(), self.B.copy(), self.C.copy()

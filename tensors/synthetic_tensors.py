@@ -215,7 +215,9 @@ def init_const_collinearity_tensor(tenpy, s, order, R, col=[0.2, 0.8], seed=1):
 
         A.append(A_i)
         col_matrix = A[i] @ A[i].transpose()
-        col_matrix_min, col_matrix_max = col_matrix.min(), (col_matrix - tenpy.eye(R, R)).max()
-        assert (col_matrix_min >= rand_num - 1e-5 and col_matrix_max <= rand_num + 1e-5)
+        col_matrix_min, col_matrix_max = col_matrix.min(), (
+            col_matrix - tenpy.eye(R, R)).max()
+        assert (col_matrix_min >= rand_num - 1e-5
+                and col_matrix_max <= rand_num + 1e-5)
 
     return A

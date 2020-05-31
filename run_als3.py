@@ -8,8 +8,8 @@ import numpy as np
 import numpy.linalg as la
 import tensors.real_tensors as real_tensors
 import tensors.synthetic_tensors as synthetic_tensors
-from CPD.als3 import als_optimizer, als_pp_optimizer
-from CPD.quad_als3 import quad_als_optimizer, quad_pp_optimizer
+from cpd.als3 import als_optimizer, als_pp_optimizer
+from cpd.quad_als3 import quad_als_optimizer, quad_pp_optimizer
 from os.path import dirname, join
 import argparse
 from pathlib import Path
@@ -63,14 +63,15 @@ def run_als():
             'random',
             'random_col',
             'scf',
-            ],
-        help='choose tensor to test, available: random, random_col, scf (default: random)')
-    parser.add_argument(
-        '--col',
-        type=float,
-        nargs='+',
-        default=[0.2, 0.8],
-        help='collinearity range')
+        ],
+        help=
+        'choose tensor to test, available: random, random_col, scf (default: random)'
+    )
+    parser.add_argument('--col',
+                        type=float,
+                        nargs='+',
+                        default=[0.2, 0.8],
+                        help='collinearity range')
     parser.add_argument('--R',
                         type=int,
                         default=1000,
@@ -117,14 +118,11 @@ def run_als():
         help=
         'used in pairwise perturbation optimizer, tolerance for dimention tree restart'
     )
-    parser.add_argument(
-        '--stopping-tol',
-        default=1e-5,
-        type=float,
-        metavar='float',
-        help=
-        'stopping tolerance'
-    )
+    parser.add_argument('--stopping-tol',
+                        default=1e-5,
+                        type=float,
+                        metavar='float',
+                        help='stopping tolerance')
     parser.add_argument('--lam',
                         default=1.,
                         type=float,
@@ -175,7 +173,8 @@ def run_als():
         Z = tenpy.random((R, s))
         T = tenpy.einsum("ai,aj,ak->ijk", X, Y, Z)
     elif args.tensor == 'random_col':
-        X, Y, Z = synthetic_tensors.init_const_collinearity_tensor(tenpy, s, 3, R, col=args.col, seed=args.seed)
+        X, Y, Z = synthetic_tensors.init_const_collinearity_tensor(
+            tenpy, s, 3, R, col=args.col, seed=args.seed)
         T = tenpy.einsum("ai,aj,ak->ijk", X, Y, Z)
     elif args.tensor == 'scf':
         filename = f'saved-tensors/scf_{args.num_molecule}_mol.npy'
@@ -268,6 +267,7 @@ def run_als():
 
     if args.backend == "ctf":
         tepoch.end()
+
 
 if __name__ == "__main__":
     run_als()
