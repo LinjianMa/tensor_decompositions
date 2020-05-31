@@ -1,0 +1,5 @@
+wget
+argparse
+pathlib
+pillow
+pyscf
