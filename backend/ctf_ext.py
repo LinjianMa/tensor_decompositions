@@ -111,6 +111,16 @@ def solve_tri(A, B, lower=True, from_left=False, transp_L=False):
     return ctf.solve_tri(A, B, lower, from_left, transp_L)
 
 
+@backend_profiler(timeit=TIMEIT,
+                  tag_names=['shape', 'shape'],
+                  tag_inputs=[0, 1])
+def solve(G, RHS):
+    rhs_t = ctf.transpose(RHS)
+    out_t = ctf.solve_spd(G, rhs_t)
+    out = ctf.transpose(out_t)
+    return out
+
+
 @backend_profiler(timeit=TIMEIT, tag_names=['einstr'], tag_inputs=[0])
 def einsum(string, *args):
     if "..." in string:
@@ -169,8 +179,9 @@ def eye(*args):
     return ctf.eye(*args)
 
 
-def transpose(A):
-    return ctf.transpose(A)
+@backend_profiler(timeit=TIMEIT, tag_names=['shape'], tag_inputs=[0])
+def transpose(A, axes=None):
+    return ctf.transpose(A, axes)
 
 
 def argmax(A, axis=0):

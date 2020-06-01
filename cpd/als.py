@@ -1,5 +1,5 @@
 import numpy as np
-from .common_kernels import solve_sys, compute_lin_sys
+from .common_kernels import compute_lin_sys
 from als.als_optimizer import DTALS_base, PPALS_base, partialPP_ALS_base
 from backend import numpy_ext
 
@@ -19,9 +19,8 @@ class CP_DTALS_Optimizer(DTALS_base):
         return einstr
 
     def _solve(self, i, Regu, s):
-        return solve_sys(self.tenpy,
-                         compute_lin_sys(self.tenpy, self.A, i, Regu),
-                         s[-1][1])
+        return self.tenpy.solve(compute_lin_sys(self.tenpy, self.A, i, Regu),
+                                s[-1][1])
 
 
 class CP_PPALS_Optimizer(PPALS_base, CP_DTALS_Optimizer):

@@ -1,7 +1,20 @@
 import time, atexit
+import ctf
+import numpy as np
 
 TIME_DICT = {}
 NUM_CALLS_DICT = {}
+
+
+def get_tag(tag_names, tag_inputs, args):
+    tag_list = []
+    for i in range(len(tag_inputs)):
+        var = args[tag_inputs[i]]
+        if isinstance(var, np.ndarray) or isinstance(var, ctf.core.tensor):
+            tag_list.append(f"{tag_names[i]}:{var.shape}")
+        else:
+            tag_list.append(f"{tag_names[i]}:{var}")
+    return tag_list
 
 
 def backend_profiler(timeit=True, tag_names=[], tag_inputs=[]):
@@ -13,11 +26,8 @@ def backend_profiler(timeit=True, tag_names=[], tag_inputs=[]):
             result = f(*args, **kwargs)
             end = time.time()
 
-            tag_list = [
-                f"{tag_names[i]}:{args[tag_inputs[i]]}"
-                for i in range(len(tag_inputs))
-            ]
-            print(f"{f.__name__} with {tag_list} took {end - start} time")
+            tag_list = get_tag(tag_names, tag_inputs, args)
+            print(f"{f.__name__} with {tag_list} took {end - start} s")
 
             if f.__name__ in NUM_CALLS_DICT.keys():
                 NUM_CALLS_DICT[f.__name__] += 1
