@@ -2,6 +2,11 @@ import numpy as np
 import numpy.linalg as la
 import scipy.linalg as sla
 
+from mkl_interface import einsum_batched_matmul
+from .profiler import backend_profiler
+
+TIMEIT = True
+
 
 def name():
     return 'numpy'
@@ -139,8 +144,9 @@ def solve_tri(A, B, lower=True, from_left=True, transp_L=False):
         return sla.solve_triangular(A, B, trans=transp_L, lower=lower)
 
 
+@backend_profiler(timeit=TIMEIT, tag_names=['einstr'], tag_inputs=[0])
 def einsum(string, *args):
-    out = np.einsum(string, *args, optimize=True)
+    out = einsum_batched_matmul(string, *args)
     return out
 
 

@@ -1,6 +1,6 @@
 import numpy as np
 import numpy.linalg as la
-from CPD.common_kernels import solve_sys
+from cpd.common_kernels import solve_sys
 from os.path import join
 import time
 import copy

@@ -54,7 +54,7 @@ def add_general_arguments(parser):
         'choose tensor to test, available: random, random_col, amino, coil100, timelapse, scf (default: random)'
     )
     parser.add_argument(
-        '--tlib',
+        '--backend',
         default="ctf",
         metavar='string',
         choices=[
@@ -141,5 +141,5 @@ def get_file_prefix(args):
         filter(None, [
             args.experiment_prefix, args.decomposition, args.method,
             args.tensor, 's' + str(args.s), 'R' + str(args.R),
-            'regu' + str(args.regularization), 'tlib' + str(args.tlib)
+            'regu' + str(args.regularization), 'backend' + str(args.backend)
         ]))

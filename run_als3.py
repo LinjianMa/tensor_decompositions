@@ -4,18 +4,17 @@ os.environ["OMP_NUM_THREADS"] = '64'  # export OMP_NUM_THREADS=4
 os.environ["MKL_NUM_THREADS"] = '64'  # export MKL_NUM_THREADS=6
 os.environ["MKL_VERBOSE"] = "0"
 
+import csv, time, copy, argparse
 import numpy as np
 import numpy.linalg as la
 import tensors.real_tensors as real_tensors
 import tensors.synthetic_tensors as synthetic_tensors
+
+from pathlib import Path
+from os.path import dirname, join
 from cpd.als3 import als_optimizer, als_pp_optimizer
 from cpd.quad_als3 import quad_als_optimizer, quad_pp_optimizer
-from os.path import dirname, join
-import argparse
-from pathlib import Path
-import csv
-import time
-import copy
+from cpd.common_kernels import khatri_rao_product_chain, get_residual
 
 parent_dir = dirname(__file__)
 results_dir = join(parent_dir, 'results')
@@ -29,14 +28,6 @@ def get_file_prefix(args):
             'lambda' + str(args.lam),
             args.method,
         ]))
-
-
-def get_residual(tenpy, T, A):
-    t0 = time.time()
-    nrm = tenpy.vecnorm(T - tenpy.einsum("ab,ac,ad->bcd", *A))
-    t1 = time.time()
-    tenpy.printf("Residual computation took", t1 - t0, "seconds")
-    return nrm
 
 
 def run_als():
@@ -171,11 +162,14 @@ def run_als():
         X = tenpy.random((R, s))
         Y = tenpy.random((R, s))
         Z = tenpy.random((R, s))
-        T = tenpy.einsum("ai,aj,ak->ijk", X, Y, Z)
+        T = khatri_rao_product_chain(tenpy, [X, Y, Z])
     elif args.tensor == 'random_col':
-        X, Y, Z = synthetic_tensors.init_const_collinearity_tensor(
-            tenpy, s, 3, R, col=args.col, seed=args.seed)
-        T = tenpy.einsum("ai,aj,ak->ijk", X, Y, Z)
+        T = synthetic_tensors.init_const_collinearity_tensor(tenpy,
+                                                             s,
+                                                             3,
+                                                             R,
+                                                             col=args.col,
+                                                             seed=args.seed)
     elif args.tensor == 'scf':
         filename = f'saved-tensors/scf_{args.num_molecule}_mol.npy'
         if not os.path.exists(filename):

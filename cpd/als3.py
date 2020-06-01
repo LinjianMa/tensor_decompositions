@@ -4,6 +4,7 @@ import time, copy
 import hptt
 import ctf
 from mkl_interface import batched_matvec_gemm
+from cpd.common_kernels import solve_sys
 
 
 def stacked_matvec(tenpy, a, b):
@@ -14,18 +15,6 @@ def stacked_matvec(tenpy, a, b):
     if tenpy.name() == 'ctf':
         out = tenpy.einsum("ijk,ik->ij", a, b)
     print(f"stacked_matvec costs {time.time() - t0}")
-    return out
-
-
-def solve_sys(tenpy, G, RHS):
-    t0 = time.time()
-    if tenpy.name() == 'numpy':
-        out = la.solve(G, RHS)
-    if tenpy.name() == 'ctf':
-        rhs_t = ctf.transpose(RHS)
-        out_t = ctf.solve_spd(G, rhs_t)
-        out = ctf.transpose(out_t)
-    print(f"solve costs {time.time() - t0}")
     return out
 
 
@@ -50,7 +39,7 @@ class als_optimizer():
         self.regu = 1e-7 * tenpy.eye(A.shape[1])
         self.lam = args.lam
         if tenpy.name() == 'numpy':
-            self.T_1 = T.reshape(T.shape[0], -1).copy()
+            self.T_1 = T.reshape(T.shape[0], -1)
             self.T_3 = transpose_w_copy(T.reshape(T.shape[0] * T.shape[1], -1))
         if tenpy.name() == 'ctf':
             self.T_1 = T

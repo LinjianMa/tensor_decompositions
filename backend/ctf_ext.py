@@ -1,6 +1,10 @@
 import ctf
 import numpy as np
 
+from .profiler import backend_profiler
+
+TIMEIT = True
+
 
 def name():
     return 'ctf'
@@ -107,6 +111,7 @@ def solve_tri(A, B, lower=True, from_left=False, transp_L=False):
     return ctf.solve_tri(A, B, lower, from_left, transp_L)
 
 
+@backend_profiler(timeit=TIMEIT, tag_names=['einstr'], tag_inputs=[0])
 def einsum(string, *args):
     if "..." in string:
         left = string.split(",")

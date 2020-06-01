@@ -1,6 +1,7 @@
 import numpy as np
-from .common_kernels import solve_sys, compute_lin_sysN
+from .common_kernels import solve_sys, compute_lin_sys
 from als.als_optimizer import DTALS_base, PPALS_base, partialPP_ALS_base
+from backend import numpy_ext
 
 
 class CP_DTALS_Optimizer(DTALS_base):
@@ -11,15 +12,15 @@ class CP_DTALS_Optimizer(DTALS_base):
             ci = "R"
             nd = M.ndim - 1
 
-        str1 = "".join([chr(ord('a') + j) for j in range(nd)]) + ci
-        str2 = (chr(ord('a') + ii)) + "R"
-        str3 = "".join([chr(ord('a') + j) for j in range(nd) if j != ii]) + "R"
+        str1 = ci + "".join([chr(ord('a') + j) for j in range(nd)])
+        str2 = "R" + (chr(ord('a') + ii))
+        str3 = "R" + "".join([chr(ord('a') + j) for j in range(nd) if j != ii])
         einstr = str1 + "," + str2 + "->" + str3
         return einstr
 
     def _solve(self, i, Regu, s):
         return solve_sys(self.tenpy,
-                         compute_lin_sysN(self.tenpy, self.A, i, Regu),
+                         compute_lin_sys(self.tenpy, self.A, i, Regu),
                          s[-1][1])
 
 

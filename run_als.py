@@ -4,19 +4,14 @@ os.environ["OMP_NUM_THREADS"] = '64'  # export OMP_NUM_THREADS=4
 os.environ["MKL_NUM_THREADS"] = '64'  # export MKL_NUM_THREADS=6
 os.environ["MKL_VERBOSE"] = "0"
 
+import time, argparse, csv
 import numpy as np
-import sys
-import time
-import argparse
-import csv
-from pathlib import Path
-from os.path import dirname, join
+import arg_defs as arg_defs
 import tensors.synthetic_tensors as synthetic_tensors
 import tensors.real_tensors as real_tensors
-import argparse
-import arg_defs as arg_defs
-import csv
 
+from pathlib import Path
+from os.path import dirname, join
 from utils import save_decomposition_results
 
 parent_dir = dirname(__file__)
@@ -180,11 +175,11 @@ if __name__ == "__main__":
     R = args.R
     num_iter = args.num_iter
     tensor = args.tensor
-    tlib = args.tlib
+    backend = args.backend
 
-    if tlib == "numpy":
+    if backend == "numpy":
         import backend.numpy_ext as tenpy
-    elif tlib == "ctf":
+    elif backend == "ctf":
         import backend.ctf_ext as tenpy
         import ctf
         tepoch = ctf.timer_epoch("ALS")
@@ -208,15 +203,14 @@ if __name__ == "__main__":
         if args.decomposition == "CP":
             tenpy.printf("Testing random tensor")
             sizes = [s] * args.order
-            [T, O] = synthetic_tensors.init_rand(tenpy, order, sizes, R, 1.,
-                                                 args.seed)
+            T = synthetic_tensors.init_rand(tenpy, order, sizes, R, args.seed)
         if args.decomposition == "Tucker":
             tenpy.printf("Testing random tensor")
             shape = s * np.ones(order).astype(int)
             T = tenpy.random(shape)
             O = None
     elif tensor == "random_col":
-        [T, O] = synthetic_tensors.init_collinearity_tensor(
+        T = synthetic_tensors.init_const_collinearity_tensor(
             tenpy, s, order, R, args.col, args.seed)
     elif tensor == "amino":
         T = real_tensors.amino_acids(tenpy)
@@ -244,17 +238,17 @@ if __name__ == "__main__":
     elif args.hosvd != 0:
         if args.decomposition == "CP":
             for i in range(T.ndim):
-                A.append(tenpy.random((args.hosvd_core_dim[i], R)))
+                A.append(tenpy.random((R, args.hosvd_core_dim[i])))
         elif args.decomposition == "Tucker":
             from Tucker.common_kernels import hosvd
             A = hosvd(tenpy, T, args.hosvd_core_dim, compute_core=False)
     else:
         if args.decomposition == "CP":
             for i in range(T.ndim):
-                A.append(tenpy.random((T.shape[i], R)))
+                A.append(tenpy.random((R, T.shape[i])))
         else:
             for i in range(T.ndim):
-                A.append(tenpy.random((T.shape[i], args.hosvd_core_dim[i])))
+                A.append(tenpy.random((args.hosvd_core_dim[i], T.shape[i])))
 
     if args.decomposition == "CP":
         if args.hosvd:
@@ -276,5 +270,5 @@ if __name__ == "__main__":
     elif args.decomposition == "Tucker":
         Tucker_ALS(tenpy, A, T, num_iter, csv_file, Regu, args.method, args,
                    args.res_calc_freq)
-    if tlib == "ctf":
+    if backend == "ctf":
         tepoch.end()
