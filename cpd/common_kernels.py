@@ -4,18 +4,6 @@ import numpy as np
 import numpy.linalg as la
 
 
-def compute_lin_sys(tenpy, A, i, Regu):
-    S = None
-    for j in range(len(A)):
-        if j != i:
-            if S is None:
-                S = tenpy.dot(A[j], tenpy.transpose(A[j]))
-            else:
-                S *= tenpy.dot(A[j], tenpy.transpose(A[j]))
-    S += Regu * tenpy.eye(S.shape[0])
-    return S
-
-
 def khatri_rao_product_chain(tenpy, mat_list):
     assert len(mat_list) >= 3
     out = tenpy.einsum("Ka,Kb->Kab", mat_list[0], mat_list[1])

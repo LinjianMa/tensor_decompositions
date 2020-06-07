@@ -47,7 +47,7 @@ class DTALS_base():
                 ss = s[-1][0][:]
                 ss.remove(ii)
                 s.append((ss, N))
-            self.A[i] = self._solve(i, Regu, s)
+            self.A[i] = self._solve(i, Regu, s[-1][1])
         return self.A
 
 
@@ -76,6 +76,7 @@ class PPALS_base():
         self.pp = False
         self.reinitialize_tree = False
         self.tol_restart_dt = args.tol_restart_dt
+        self.with_correction = args.pp_with_correction
         self.tree = {'0': (list(range(len(self.A))), self.T)}
         self.order = len(A)
         self.dA = []
@@ -89,6 +90,14 @@ class PPALS_base():
 
     @abc.abstractmethod
     def _solve_PP(self, i, Regu, N):
+        return
+
+    @abc.abstractmethod
+    def _pp_correction(self, i):
+        return
+
+    @abc.abstractmethod
+    def _pp_correction_init(self):
         return
 
     @abc.abstractmethod
@@ -166,13 +175,9 @@ class PPALS_base():
         if not parent_nodename in self.tree:
             self._initialize_treenode(parent_nodeindex)
 
-        # t0 = time.time()
         N = self.tenpy.einsum(einstr, self.tree[parent_nodename][1],
                               self.A[contract_index])
-        # t1 = time.time()
         self.tree[nodename] = (nodeindex, N)
-        # self.tenpy.printf(einstr)
-        # self.tenpy.printf("!!!!!!!! pairwise perturbation initialize tree took", t1-t0,"seconds")
 
     def _initialize_tree(self):
         """Initialize self.tree
@@ -190,6 +195,9 @@ class PPALS_base():
         for ii in range(0, self.order):
             self._initialize_treenode(np.array([ii]))
 
+        if self.with_correction:
+            self._pp_correction_init()
+
     def _step_pp_subroutine(self, Regu):
         """Doing one step update based on pairwise perturbation
 
@@ -203,18 +211,21 @@ class PPALS_base():
         print("***** pairwise perturbation step *****")
         for i in range(self.order):
             nodename = self._get_nodename(np.array([i]))
-            N = self.tree[nodename][1][:]
+            N = self.tree[nodename][1][:].copy()
 
             for j in range(i):
                 parentname = self._get_nodename(np.array([j, i]))
                 einstr = self._get_einstr(np.array([i]), np.array([j, i]), j)
-                N = N + self.tenpy.einsum(einstr, self.tree[parentname][1],
-                                          self.dA[j])
+                N += self.tenpy.einsum(einstr, self.tree[parentname][1],
+                                       self.dA[j])
             for j in range(i + 1, self.order):
                 parentname = self._get_nodename(np.array([i, j]))
                 einstr = self._get_einstr(np.array([i]), np.array([i, j]), j)
-                N = N + self.tenpy.einsum(einstr, self.tree[parentname][1],
-                                          self.dA[j])
+                N += self.tenpy.einsum(einstr, self.tree[parentname][1],
+                                       self.dA[j])
+
+            if self.with_correction:
+                N += self._pp_correction(i)
 
             output = self._solve_PP(i, Regu, N)
             self.dA[i] = self.dA[i] + output - self.A[i]
@@ -222,8 +233,8 @@ class PPALS_base():
 
         num_smallupdate = 0
         for i in range(self.order):
-            if self.tenpy.sum(self.dA[i]**2)**.5 / self.tenpy.sum(
-                    self.A[i]**2)**.5 > self.tol_restart_dt:
+            if self.tenpy.vecnorm(self.dA[i]) / self.tenpy.vecnorm(
+                    self.A[i]) > self.tol_restart_dt:
                 num_smallupdate += 1
 
         if num_smallupdate > 0:
@@ -247,8 +258,8 @@ class PPALS_base():
         num_smallupdate = 0
         for i in range(self.order):
             self.dA[i] = self.A[i] - A_prev[i]
-            if self.tenpy.sum(self.dA[i]**2)**.5 / self.tenpy.sum(
-                    self.A[i]**2)**.5 < self.tol_restart_dt:
+            if self.tenpy.vecnorm(self.dA[i]) / self.tenpy.vecnorm(
+                    self.A[i]) < self.tol_restart_dt:
                 num_smallupdate += 1
 
         if num_smallupdate == self.order:

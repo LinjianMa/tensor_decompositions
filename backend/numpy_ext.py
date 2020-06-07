@@ -6,8 +6,6 @@ import scipy.linalg as sla
 from mkl_interface import einsum_batched_matmul
 from .profiler import backend_profiler
 
-TIMEIT = True
-
 
 def name():
     return 'numpy'
@@ -105,9 +103,7 @@ def norm(v):
     return la.norm(v)
 
 
-@backend_profiler(timeit=TIMEIT,
-                  tag_names=['shape', 'shape'],
-                  tag_inputs=[0, 1])
+@backend_profiler(tag_names=['shape', 'shape'], tag_inputs=[0, 1])
 def dot(A, B):
     return np.dot(A, B)
 
@@ -148,15 +144,13 @@ def solve_tri(A, B, lower=True, from_left=True, transp_L=False):
         return sla.solve_triangular(A, B, trans=transp_L, lower=lower)
 
 
-@backend_profiler(timeit=TIMEIT,
-                  tag_names=['shape', 'shape'],
-                  tag_inputs=[0, 1])
+@backend_profiler(tag_names=['shape', 'shape'], tag_inputs=[0, 1])
 def solve(G, RHS):
     out = la.solve(G, RHS)
     return out
 
 
-@backend_profiler(timeit=TIMEIT, tag_names=['einstr'], tag_inputs=[0])
+@backend_profiler(tag_names=['einstr'], tag_inputs=[0])
 def einsum(string, *args):
     out = einsum_batched_matmul(string, *args)
     return out
@@ -194,7 +188,7 @@ def eye(*args):
     return np.eye(*args)
 
 
-@backend_profiler(timeit=TIMEIT, tag_names=['shape'], tag_inputs=[0])
+@backend_profiler(tag_names=['shape'], tag_inputs=[0])
 def transpose(A, axes=(1, 0)):
     return hptt.transpose(A, axes)
 

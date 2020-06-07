@@ -23,11 +23,6 @@ def add_general_arguments(parser):
                         default=10,
                         metavar='int',
                         help='Input CP decomposition rank (default: 10)')
-    parser.add_argument('--r',
-                        type=int,
-                        default=10,
-                        metavar='int',
-                        help='Update rank size (default: 10)')
     parser.add_argument('--num-iter',
                         type=int,
                         default=10,
@@ -115,6 +110,9 @@ def add_general_arguments(parser):
         help=
         'Where to load the tensor if the file exists. Empty means it starts from scratch. E.g. --load-tensor results/YOUR-FOLDER/ (do not forget the /)'
     )
+    parser.add_argument('--profile',
+                        action='store_true',
+                        help="Whether to profile the code.")
 
 
 def add_pp_arguments(parser):
@@ -126,6 +124,9 @@ def add_pp_arguments(parser):
         help=
         'used in pairwise perturbation optimizer, tolerance for dimention tree restart'
     )
+    parser.add_argument('--pp-with-correction',
+                        action='store_true',
+                        help="Whether to use the correction term.")
 
 
 def add_col_arguments(parser):

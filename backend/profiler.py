@@ -4,6 +4,12 @@ import numpy as np
 
 TIME_DICT = {}
 NUM_CALLS_DICT = {}
+_TIMEIT = False
+
+
+def do_profile(timeit=True):
+    global _TIMEIT
+    _TIMEIT = timeit
 
 
 def get_tag(tag_names, tag_inputs, args):
@@ -17,7 +23,7 @@ def get_tag(tag_names, tag_inputs, args):
     return tag_list
 
 
-def backend_profiler(timeit=True, tag_names=[], tag_inputs=[]):
+def backend_profiler(tag_names=[], tag_inputs=[]):
     assert len(tag_names) == len(tag_inputs)
 
     def decorator(f):
@@ -38,7 +44,7 @@ def backend_profiler(timeit=True, tag_names=[], tag_inputs=[]):
 
             return result
 
-        if timeit:
+        if _TIMEIT:
             return f_timer
         else:
             return f

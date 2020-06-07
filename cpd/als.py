@@ -1,10 +1,15 @@
 import numpy as np
-from .common_kernels import compute_lin_sys
 from als.als_optimizer import DTALS_base, PPALS_base, partialPP_ALS_base
 from backend import numpy_ext
 
 
 class CP_DTALS_Optimizer(DTALS_base):
+    def __init__(self, tenpy, T, A):
+        DTALS_base.__init__(self, tenpy, T, A)
+        self.ATA_hash = {}
+        for i in range(len(A)):
+            self.ATA_hash[i] = tenpy.dot(A[i], tenpy.transpose(A[i]))
+
     def _einstr_builder(self, M, s, ii):
         ci = ""
         nd = M.ndim
@@ -18,9 +23,21 @@ class CP_DTALS_Optimizer(DTALS_base):
         einstr = str1 + "," + str2 + "->" + str3
         return einstr
 
+    def compute_lin_sys(self, i, Regu):
+        S = None
+        for j in range(len(self.A)):
+            if j != i:
+                if S is None:
+                    S = self.ATA_hash[j].copy()
+                else:
+                    S *= self.ATA_hash[j]
+        S += Regu * self.tenpy.eye(S.shape[0])
+        return S
+
     def _solve(self, i, Regu, s):
-        return self.tenpy.solve(compute_lin_sys(self.tenpy, self.A, i, Regu),
-                                s[-1][1])
+        new_Ai = self.tenpy.solve(self.compute_lin_sys(i, Regu), s)
+        self.ATA_hash[i] = self.tenpy.dot(new_Ai, self.tenpy.transpose(new_Ai))
+        return new_Ai
 
 
 class CP_PPALS_Optimizer(PPALS_base, CP_DTALS_Optimizer):
@@ -30,6 +47,9 @@ class CP_PPALS_Optimizer(PPALS_base, CP_DTALS_Optimizer):
     def __init__(self, tenpy, T, A, args):
         PPALS_base.__init__(self, tenpy, T, A, args)
         CP_DTALS_Optimizer.__init__(self, tenpy, T, A)
+        self.rank = A[0].shape[0]
+        self.A = A
+        self.tenpy = tenpy
 
     def _get_einstr(self, nodeindex, parent_nodeindex, contract_index):
         """Build the Einstein string for the contraction.
@@ -54,18 +74,40 @@ class CP_PPALS_Optimizer(PPALS_base, CP_DTALS_Optimizer):
         if len(parent_nodeindex) != self.order:
             ci = "R"
 
-        str1 = "".join([chr(ord('a') + j) for j in parent_nodeindex]) + ci
-        str2 = (chr(ord('a') + contract_index)) + "R"
-        str3 = "".join([chr(ord('a') + j) for j in nodeindex]) + "R"
+        str1 = ci + "".join([chr(ord('a') + j) for j in parent_nodeindex])
+        str2 = "R" + (chr(ord('a') + contract_index))
+        str3 = "R" + "".join([chr(ord('a') + j) for j in nodeindex])
         einstr = str1 + "," + str2 + "->" + str3
         return einstr
+
+    def _pp_correction_init(self):
+        self.dATA_hash = {}
+        for i in range(len(self.A)):
+            self.dATA_hash[i] = self.tenpy.zeros([self.rank, self.rank])
+
+    def _pp_correction(self, i):
+        j_list = [j for j in range(len(self.A)) if j != i]
+        S_accumulate = self.tenpy.zeros([self.rank, self.rank])
+
+        for k in range(len(j_list) - 1):
+            for l in range(k + 1, len(j_list)):
+                S = self.dATA_hash[j_list[k]] * self.dATA_hash[j_list[l]]
+                for jj in range(len(j_list)):
+                    if jj != k and jj != l:
+                        S *= self.ATA_hash[j_list[jj]]
+                S_accumulate += S
+        return self.tenpy.einsum("ij,jk->ik", S_accumulate, self.A[i])
 
     def _step_dt(self, Regu):
         return CP_DTALS_Optimizer.step(self, Regu)
 
     def _solve_PP(self, i, Regu, N):
-        return solve_sys(self.tenpy,
-                         compute_lin_sysN(self.tenpy, self.A, i, Regu), N)
+        new_Ai = CP_DTALS_Optimizer._solve(self, i, Regu, N)
+        new_dAi = new_Ai - self.A[i] + self.dA[i]
+        if self.with_correction:
+            self.dATA_hash[i] = self.tenpy.dot(new_dAi,
+                                               self.tenpy.transpose(new_Ai))
+        return new_Ai
 
 
 class CP_partialPPALS_Optimizer(partialPP_ALS_base, CP_DTALS_Optimizer):

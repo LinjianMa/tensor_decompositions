@@ -12,6 +12,7 @@ import tensors.real_tensors as real_tensors
 
 from pathlib import Path
 from os.path import dirname, join
+from backend import profiler
 from utils import save_decomposition_results
 
 parent_dir = dirname(__file__)
@@ -176,6 +177,8 @@ if __name__ == "__main__":
     num_iter = args.num_iter
     tensor = args.tensor
     backend = args.backend
+
+    profiler.do_profile(args.profile)
 
     if backend == "numpy":
         import backend.numpy_ext as tenpy
