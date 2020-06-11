@@ -127,6 +127,9 @@ def add_pp_arguments(parser):
     parser.add_argument('--pp-with-correction',
                         action='store_true',
                         help="Whether to use the correction term.")
+    parser.add_argument('--pp-debug',
+                        action='store_true',
+                        help="Whether to debug the pp procedure.")
 
 
 def add_col_arguments(parser):

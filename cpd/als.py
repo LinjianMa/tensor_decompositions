@@ -1,6 +1,8 @@
+import time
 import numpy as np
 from als.als_optimizer import DTALS_base, PPALS_base, partialPP_ALS_base
 from backend import numpy_ext
+from .common_kernels import sub_lists, mttkrp
 
 
 class CP_DTALS_Optimizer(DTALS_base):
@@ -89,19 +91,29 @@ class CP_PPALS_Optimizer(PPALS_base, CP_DTALS_Optimizer):
         j_list = [j for j in range(len(self.A)) if j != i]
         S_accumulate = self.tenpy.zeros([self.rank, self.rank])
 
-        for k in range(len(j_list) - 1):
-            for l in range(k + 1, len(j_list)):
-                S = self.dATA_hash[j_list[k]] * self.dATA_hash[j_list[l]]
-                for jj in range(len(j_list)):
-                    if jj != k and jj != l:
-                        S *= self.ATA_hash[j_list[jj]]
-                S_accumulate += S
+        dA_indices_list = sub_lists(j_list, 2)
+        for dA_indices in dA_indices_list:
+            S = self.tenpy.ones([self.rank, self.rank])
+            for j in j_list:
+                if j in dA_indices:
+                    S *= self.dATA_hash[j]
+                else:
+                    S *= self.ATA_hash[j]
+            S_accumulate += S
+
         return self.tenpy.einsum("ij,jk->ik", S_accumulate, self.A[i])
 
     def _step_dt(self, Regu):
         return CP_DTALS_Optimizer.step(self, Regu)
 
     def _solve_PP(self, i, Regu, N):
+        # check the relative residual
+        if self.pp_debug:
+            N_dt = mttkrp(self.tenpy, self.A, self.T, i)
+            print(
+                f"relative norm of X is {self.tenpy.vecnorm(N-N_dt) / self.tenpy.vecnorm(N_dt)}"
+            )
+
         new_Ai = CP_DTALS_Optimizer._solve(self, i, Regu, N)
         new_dAi = new_Ai - self.A[i] + self.dA[i]
         if self.with_correction:

@@ -3,6 +3,17 @@ import ctf
 import numpy as np
 import numpy.linalg as la
 
+from itertools import combinations
+
+
+def sub_lists(in_list, min_length):
+    subs = []
+    for i in range(min_length, len(in_list) + 1):
+        temp = [list(x) for x in combinations(in_list, i)]
+        if len(temp) > 0:
+            subs.extend(temp)
+    return subs
+
 
 def khatri_rao_product_chain(tenpy, mat_list):
     assert len(mat_list) >= 3
@@ -20,6 +31,24 @@ def khatri_rao_product_chain(tenpy, mat_list):
     out = tenpy.einsum(f"{str1},{str2}->{str3}", out,
                        mat_list[len(mat_list) - 1])
     return out
+
+
+def mttkrp(tenpy, mat_list, T, i):
+    assert len(mat_list) == len(T.shape)
+    order = len(T.shape)
+    str_tensor = "".join(chr(ord('a') + j) for j in range(order))
+    out_tensor = T
+    for j in range(order):
+        if j != i:
+            str_mat = "K" + chr(ord('a') + j)
+            str_out = "".join(
+                [char for char in str_tensor if char != chr(ord('a') + j)])
+            if str_out[0] != "K":
+                str_out = "K" + str_out
+            out_tensor = tenpy.einsum(f"{str_tensor},{str_mat}->{str_out}",
+                                      out_tensor, mat_list[j])
+            str_tensor = str_out
+    return out_tensor
 
 
 def get_residual(tenpy, T, A):

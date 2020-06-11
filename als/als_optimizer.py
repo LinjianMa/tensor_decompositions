@@ -73,9 +73,11 @@ class PPALS_base():
         self.T = T
         self.A = A
 
+        self.pp_debug = args.pp_debug
         self.pp = False
         self.reinitialize_tree = False
         self.tol_restart_dt = args.tol_restart_dt
+        self.tol_restart_pp = 1. * self.tol_restart_dt
         self.with_correction = args.pp_with_correction
         self.tree = {'0': (list(range(len(self.A))), self.T)}
         self.order = len(A)
@@ -228,18 +230,17 @@ class PPALS_base():
                 N += self._pp_correction(i)
 
             output = self._solve_PP(i, Regu, N)
-            self.dA[i] = self.dA[i] + output - self.A[i]
+            self.dA[i] += output - self.A[i]
             self.A[i] = output
 
-        num_smallupdate = 0
-        for i in range(self.order):
-            if self.tenpy.vecnorm(self.dA[i]) / self.tenpy.vecnorm(
-                    self.A[i]) > self.tol_restart_dt:
-                num_smallupdate += 1
-
-        if num_smallupdate > 0:
-            self.pp = False
-            self.reinitialize_tree = False
+            relative_perturbation = self.tenpy.vecnorm(
+                self.dA[i]) / self.tenpy.vecnorm(self.A[i])
+            if self.pp_debug:
+                print(f"relative perturbation is {relative_perturbation}")
+            if relative_perturbation > self.tol_restart_pp:
+                self.pp = False
+                self.reinitialize_tree = False
+                break
 
         return self.A
 

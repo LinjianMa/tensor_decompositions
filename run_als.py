@@ -72,14 +72,11 @@ def CP_ALS(tenpy,
                     csv_file.flush()
 
         t0 = time.time()
-        print("Regu is:", Regu)
-
         if method == 'PP':
             A, pp_restart = optimizer.step(Regu)
             flag_dt = not pp_restart
         else:
             A = optimizer.step(Regu)
-
         t1 = time.time()
         tenpy.printf("[", i, "] Sweep took", t1 - t0, "seconds")
 
