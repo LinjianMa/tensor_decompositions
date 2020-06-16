@@ -121,6 +121,41 @@ class CP_PPALS_Optimizer(PPALS_base, CP_DTALS_Optimizer):
                                                self.tenpy.transpose(new_Ai))
         return new_Ai
 
+    def _step_pp_subroutine(self, Regu):
+        print("***** pairwise perturbation step *****")
+        for i in range(self.order):
+            output = self._pp_mode_update(Regu, i)
+            self.dA[i] += output - self.A[i]
+            self.A[i] = output
+
+            relative_perturbation = self.tenpy.vecnorm(
+                self.dA[i]) / self.tenpy.vecnorm(self.A[i])
+            if self.pp_debug:
+                print(f"relative perturbation is {relative_perturbation}")
+            if relative_perturbation > self.tol_restart_pp:
+                self.pp = False
+                self.reinitialize_tree = False
+                break
+        return self.A
+
+    def _step_dt_subroutine(self, Regu):
+        A_prev = self.A.copy()
+        self._step_dt(Regu)
+        num_smallupdate = 0
+        for i in range(self.order):
+            self.dA[i] = self.A[i] - A_prev[i]
+            relative_perturbation = self.tenpy.vecnorm(
+                self.dA[i]) / self.tenpy.vecnorm(self.A[i])
+            if self.pp_debug:
+                print(f"relative perturbation is {relative_perturbation}")
+            if relative_perturbation < self.tol_restart_dt:
+                num_smallupdate += 1
+
+        if num_smallupdate == self.order:
+            self.pp = True
+            self.reinitialize_tree = True
+        return self.A
+
 
 class CP_partialPPALS_Optimizer(partialPP_ALS_base, CP_DTALS_Optimizer):
     """Pairwise perturbation CP decomposition optimizer

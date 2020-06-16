@@ -17,13 +17,14 @@ def n_mode_eigendec(tenpy, T, n, rank, do_flipsign=True):
 
     Y = tenpy.einsum(einstr, T, T)
     N = Y.shape[0]
-    U, _, _ = tenpy.svd(Y)
-    U = U[:, :rank]
+    _, _, V = tenpy.rsvd(Y, rank)
+    # _, _, V = tenpy.svd(Y)
+    # V = V[:rank, :]
 
     # flip sign
     if do_flipsign:
-        U = flipsign(tenpy, U)
-    return U
+        V = flipsign(tenpy, V)
+    return V
 
 
 def ttmc(tenpy, T, A, transpose=False):
@@ -54,16 +55,16 @@ def ttmc(tenpy, T, A, transpose=False):
     return X
 
 
-def flipsign(tenpy, U):
+def flipsign(tenpy, V):
     """
     Flip sign of factor matrices such that largest magnitude
     element will be positive
     """
-    midx = tenpy.argmax(U, axis=0)
-    for i in range(U.shape[1]):
-        if U[int(midx[i]), i] < 0:
-            U[:, i] = -U[:, i]
-    return U
+    midx = tenpy.argmax(V, axis=1)
+    for i in range(V.shape[0]):
+        if V[i, int(midx[i])] < 0:
+            V[i, :] = -V[i, :]
+    return V
 
 
 def hosvd(tenpy, T, ranks, compute_core=False):
@@ -85,13 +86,8 @@ def get_residual(tenpy, T, A):
     t0 = time.time()
     AAT = [None for _ in range(T.ndim)]
     for i in range(T.ndim):
-        AAT[i] = tenpy.dot(A[i], tenpy.transpose(A[i]))
+        AAT[i] = tenpy.dot(tenpy.transpose(A[i]), A[i])
     nrm = tenpy.vecnorm(T - ttmc(tenpy, T, AAT, transpose=False))
     t1 = time.time()
     tenpy.printf("Residual computation took", t1 - t0, "seconds")
     return nrm
-
-
-def get_residual_sp(tenpy, O, T, A):
-    # TODO: implementation
-    pass

@@ -93,8 +93,29 @@ def dot(A, B):
     return ctf.dot(A, B)
 
 
+@backend_profiler(tag_names=['shape'], tag_inputs=[0])
 def svd(A, r=None):
     return ctf.svd(A, r)
+
+
+@backend_profiler(tag_names=['shape', 'rank'], tag_inputs=[0, 1])
+def rsvd(a, rank, niter=2, oversamp=5):
+    m, n = a.shape
+    r = min(rank + oversamp, m, n)
+    # find subspace
+    q = ctf.random.random((n, r)) * 2 - 1.
+    for i in range(niter):
+        q = a.transpose() @ (a @ q)
+        q, _ = ctf.qr(q)
+    q = a @ q
+    q, _ = ctf.qr(q)
+    # svd
+    a_sub = q.transpose() @ a
+    u_sub, s, vh = ctf.svd(a_sub)
+    u = q @ u_sub
+    if rank < r:
+        u, s, vh = u[:, :rank], s[:rank], vh[:rank, :]
+    return u, s, vh
 
 
 def svd_rand(A, r):

@@ -24,7 +24,7 @@ def CP_ALS(tenpy,
            T,
            num_iter,
            csv_file=None,
-           Regu=None,
+           Regu=0.,
            method='DT',
            args=None,
            res_calc_freq=1):
@@ -39,9 +39,6 @@ def CP_ALS(tenpy,
                                 delimiter=',',
                                 quotechar='|',
                                 quoting=csv.QUOTE_MINIMAL)
-
-    if Regu is None:
-        Regu = 0
 
     iters = 0
     normT = tenpy.vecnorm(T)
@@ -65,7 +62,7 @@ def CP_ALS(tenpy,
             fitness = 1 - res / normT
 
             if tenpy.is_master_proc():
-                print("[", i, "] Residual is", res, "fitness is: ", fitness)
+                print(f"[ {i} ] Residual is {res}, fitness is: {fitness}")
                 # write to csv file
                 if csv_file is not None:
                     csv_writer.writerow([i, time_all, res, fitness, flag_dt])
@@ -78,12 +75,12 @@ def CP_ALS(tenpy,
         else:
             A = optimizer.step(Regu)
         t1 = time.time()
-        tenpy.printf("[", i, "] Sweep took", t1 - t0, "seconds")
+        tenpy.printf(f"[ {i} ] Sweep took {t1 - t0} seconds")
 
         time_all += t1 - t0
         fitness_old = fitness
 
-    tenpy.printf(method + " method took", time_all, "seconds overall")
+    tenpy.printf(f"{method} method took {time_all} seconds overall")
 
     if args.save_tensor:
         folderpath = join(results_dir, arg_defs.get_file_prefix(args))
@@ -97,15 +94,14 @@ def Tucker_ALS(tenpy,
                T,
                num_iter,
                csv_file=None,
-               Regu=None,
+               Regu=0.,
                method='DT',
                args=None,
                res_calc_freq=1):
 
-    from Tucker.common_kernels import get_residual_sp, get_residual
-    from Tucker.standard_ALS import Tucker_DTALS_Optimizer, Tucker_PPALS_Optimizer
+    from tucker.common_kernels import get_residual
+    from tucker.als import Tucker_DTALS_Optimizer, Tucker_PPALS_Optimizer
 
-    # TODO: currently all the methods are messed up. Needs to refactor a lot.
     flag_dt = True
 
     if csv_file is not None:
@@ -128,11 +124,11 @@ def Tucker_ALS(tenpy,
             if args.save_tensor:
                 folderpath = join(results_dir, arg_defs.get_file_prefix(args))
                 save_decomposition_results(T, A, tenpy, folderpath)
-            res = get_residual(tenpy, T, optimizer.A)
+            res = get_residual(tenpy, T, A)
             fitness = 1 - res / normT
 
             if tenpy.is_master_proc():
-                print("[", i, "] Residual is", res, "fitness is: ", fitness)
+                print(f"[ {i} ] Residual is {res}, fitness is: {fitness}")
                 # write to csv file
                 if csv_file is not None:
                     csv_writer.writerow([i, time_all, res, fitness, flag_dt])
@@ -144,9 +140,9 @@ def Tucker_ALS(tenpy,
         else:
             A = optimizer.step(Regu)
         t1 = time.time()
-        tenpy.printf("Sweep took", t1 - t0, "seconds")
+        tenpy.printf(f"[ {i} ] Sweep took {t1 - t0} seconds")
         time_all += t1 - t0
-    tenpy.printf("Naive method took", time_all, "seconds overall")
+    tenpy.printf(f"{method} method took {time_all} seconds overall")
 
     return A, res
 
@@ -198,7 +194,6 @@ if __name__ == "__main__":
 
     if args.load_tensor is not '':
         T = tenpy.load_tensor_from_file(args.load_tensor + 'tensor.npy')
-        O = None
     elif tensor == "random":
         if args.decomposition == "CP":
             tenpy.printf("Testing random tensor")
@@ -208,22 +203,17 @@ if __name__ == "__main__":
             tenpy.printf("Testing random tensor")
             shape = s * np.ones(order).astype(int)
             T = tenpy.random(shape)
-            O = None
     elif tensor == "random_col":
         T = synthetic_tensors.init_const_collinearity_tensor(
             tenpy, s, order, R, args.col, args.seed)
     elif tensor == "amino":
         T = real_tensors.amino_acids(tenpy)
-        O = None
     elif tensor == "coil100":
         T = real_tensors.coil_100(tenpy)
-        O = None
     elif tensor == "timelapse":
         T = real_tensors.time_lapse_images(tenpy)
-        O = None
     elif tensor == "scf":
         T = real_tensors.get_scf_tensor(tenpy)
-        O = None
 
     tenpy.printf("The shape of the input tensor is: ", T.shape)
 
@@ -240,7 +230,7 @@ if __name__ == "__main__":
             for i in range(T.ndim):
                 A.append(tenpy.random((R, args.hosvd_core_dim[i])))
         elif args.decomposition == "Tucker":
-            from Tucker.common_kernels import hosvd
+            from tucker.common_kernels import hosvd
             A = hosvd(tenpy, T, args.hosvd_core_dim, compute_core=False)
     else:
         if args.decomposition == "CP":
@@ -252,7 +242,7 @@ if __name__ == "__main__":
 
     if args.decomposition == "CP":
         if args.hosvd:
-            from Tucker.common_kernels import hosvd
+            from tucker.common_kernels import hosvd
             transformer, compressed_T = hosvd(tenpy,
                                               T,
                                               args.hosvd_core_dim,

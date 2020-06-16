@@ -50,7 +50,7 @@ def add_general_arguments(parser):
     )
     parser.add_argument(
         '--backend',
-        default="ctf",
+        default="numpy",
         metavar='string',
         choices=[
             'ctf',

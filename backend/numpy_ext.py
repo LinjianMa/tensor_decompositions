@@ -116,6 +116,7 @@ def eigvalsh(A):
     return la.eigvalsh(A)
 
 
+@backend_profiler(tag_names=['shape'], tag_inputs=[0])
 def svd(A, r=None):
     U, s, VT = la.svd(A, full_matrices=False)
     if r is not None:
@@ -123,6 +124,26 @@ def svd(A, r=None):
         s = s[:r]
         VT = VT[:r, :]
     return U, s, VT
+
+
+@backend_profiler(tag_names=['shape', 'rank'], tag_inputs=[0, 1])
+def rsvd(a, rank, niter=2, oversamp=5):
+    m, n = a.shape
+    r = min(rank + oversamp, m, n)
+    # find subspace
+    q = np.random.uniform(low=-1.0, high=1.0, size=(n, r))
+    for i in range(niter):
+        q = a.T @ (a @ q)
+        q, _ = la.qr(q)
+    q = a @ q
+    q, _ = la.qr(q)
+    # svd
+    a_sub = q.T @ a
+    u_sub, s, vh = la.svd(a_sub)
+    u = q @ u_sub
+    if rank < r:
+        u, s, vh = u[:, :rank], s[:rank], vh[:rank, :]
+    return u, s, vh
 
 
 def svd_rand(A, r=None):

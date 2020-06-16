@@ -186,6 +186,7 @@ class PPALS_base():
         """
         self.tree = {'0': (list(range(len(self.A))), self.T)}
         self.dA = []
+        self.dcore = None
         for i in range(self.order):
             self.dA.append(
                 self.tenpy.zeros((self.A[i].shape[0], self.A[i].shape[1])))
@@ -200,73 +201,45 @@ class PPALS_base():
         if self.with_correction:
             self._pp_correction_init()
 
+    def _pp_mode_update(self, Regu, i):
+        nodename = self._get_nodename(np.array([i]))
+        N = self.tree[nodename][1][:].copy()
+
+        for j in range(i):
+            parentname = self._get_nodename(np.array([j, i]))
+            einstr = self._get_einstr(np.array([i]), np.array([j, i]), j)
+            N += self.tenpy.einsum(einstr, self.tree[parentname][1],
+                                   self.dA[j])
+        for j in range(i + 1, self.order):
+            parentname = self._get_nodename(np.array([i, j]))
+            einstr = self._get_einstr(np.array([i]), np.array([i, j]), j)
+            N += self.tenpy.einsum(einstr, self.tree[parentname][1],
+                                   self.dA[j])
+
+        if self.with_correction:
+            N += self._pp_correction(i)
+
+        return self._solve_PP(i, Regu, N)
+
+    @abc.abstractmethod
     def _step_pp_subroutine(self, Regu):
         """Doing one step update based on pairwise perturbation
-
         Args:
             Regu (matrix): Regularization term
-
         Returns:
             A (list): list of decomposed matrices
-
         """
-        print("***** pairwise perturbation step *****")
-        for i in range(self.order):
-            nodename = self._get_nodename(np.array([i]))
-            N = self.tree[nodename][1][:].copy()
+        return
 
-            for j in range(i):
-                parentname = self._get_nodename(np.array([j, i]))
-                einstr = self._get_einstr(np.array([i]), np.array([j, i]), j)
-                N += self.tenpy.einsum(einstr, self.tree[parentname][1],
-                                       self.dA[j])
-            for j in range(i + 1, self.order):
-                parentname = self._get_nodename(np.array([i, j]))
-                einstr = self._get_einstr(np.array([i]), np.array([i, j]), j)
-                N += self.tenpy.einsum(einstr, self.tree[parentname][1],
-                                       self.dA[j])
-
-            if self.with_correction:
-                N += self._pp_correction(i)
-
-            output = self._solve_PP(i, Regu, N)
-            self.dA[i] += output - self.A[i]
-            self.A[i] = output
-
-            relative_perturbation = self.tenpy.vecnorm(
-                self.dA[i]) / self.tenpy.vecnorm(self.A[i])
-            if self.pp_debug:
-                print(f"relative perturbation is {relative_perturbation}")
-            if relative_perturbation > self.tol_restart_pp:
-                self.pp = False
-                self.reinitialize_tree = False
-                break
-
-        return self.A
-
+    @abc.abstractmethod
     def _step_dt_subroutine(self, Regu):
         """Doing one step update based on dimension tree
-
         Args:
             Regu (matrix): Regularization term
-
         Returns:
             A (list): list of decomposed matrices
-
         """
-        A_prev = self.A[:]
-        self._step_dt(Regu)
-        num_smallupdate = 0
-        for i in range(self.order):
-            self.dA[i] = self.A[i] - A_prev[i]
-            if self.tenpy.vecnorm(self.dA[i]) / self.tenpy.vecnorm(
-                    self.A[i]) < self.tol_restart_dt:
-                num_smallupdate += 1
-
-        if num_smallupdate == self.order:
-            self.pp = True
-            self.reinitialize_tree = True
-        return self.A
+        return
 
     def step(self, Regu):
         """Doing one step update in the optimizer

@@ -1,7 +1,7 @@
 import numpy as np
 import queue
 from .common_kernels import n_mode_eigendec
-from als.ALS_optimizer import DTALS_base, PPALS_base
+from als.als_optimizer import DTALS_base, PPALS_base
 
 
 class Tucker_DTALS_Optimizer(DTALS_base):
@@ -9,13 +9,14 @@ class Tucker_DTALS_Optimizer(DTALS_base):
         DTALS_base.__init__(self, tenpy, T, A)
         self.tucker_rank = []
         for i in range(len(A)):
-            self.tucker_rank.append(A[i].shape[1])
+            self.tucker_rank.append(A[i].shape[0])
+        self.core = tenpy.ones([Ai.shape[0] for Ai in A])
 
     def _einstr_builder(self, M, s, ii):
         nd = M.ndim
 
         str1 = "".join([chr(ord('a') + j) for j in range(nd)])
-        str2 = (chr(ord('a') + ii)) + "R"
+        str2 = "R" + (chr(ord('a') + ii))
         str3 = "".join([chr(ord('a') + j) for j in range(ii)]) + "R" + "".join(
             [chr(ord('a') + j) for j in range(ii + 1, nd)])
         einstr = str1 + "," + str2 + "->" + str3
@@ -23,11 +24,19 @@ class Tucker_DTALS_Optimizer(DTALS_base):
 
     def _solve(self, i, Regu, s):
         # NOTE: Regu is not used here
-        return n_mode_eigendec(self.tenpy,
-                               s[-1][1],
-                               i,
-                               rank=self.tucker_rank[i],
-                               do_flipsign=True)
+        output = n_mode_eigendec(self.tenpy,
+                                 s,
+                                 i,
+                                 rank=self.tucker_rank[i],
+                                 do_flipsign=True)
+        if i == len(self.A) - 1:
+            str1 = "".join([chr(ord('a') + j) for j in range(self.T.ndim)])
+            str2 = "R" + (chr(ord('a') + self.T.ndim - 1))
+            str3 = "".join([chr(ord('a') + j)
+                            for j in range(self.T.ndim - 1)]) + "R"
+            einstr = str1 + "," + str2 + "->" + str3
+            self.core = self.tenpy.einsum(einstr, s, output)
+        return output
 
 
 class Tucker_PPALS_Optimizer(PPALS_base, Tucker_DTALS_Optimizer):
@@ -59,7 +68,7 @@ class Tucker_PPALS_Optimizer(PPALS_base, Tucker_DTALS_Optimizer):
         """
         nd = self.order
         str1 = "".join([chr(ord('a') + j) for j in range(nd)])
-        str2 = (chr(ord('a') + contract_index)) + "R"
+        str2 = "R" + (chr(ord('a') + contract_index))
         str3 = "".join(
             [chr(ord('a') + j)
              for j in range(contract_index)]) + "R" + "".join(
@@ -67,8 +76,48 @@ class Tucker_PPALS_Optimizer(PPALS_base, Tucker_DTALS_Optimizer):
         einstr = str1 + "," + str2 + "->" + str3
         return einstr
 
+    def _pp_correction_init(self):
+        raise NotImplementedError
+
+    def _pp_correction(self, i):
+        raise NotImplementedError
+
     def _step_dt(self, Regu):
         return Tucker_DTALS_Optimizer.step(self, Regu)
 
+    def _step_dt_subroutine(self, Regu):
+        core_prev = self.core.copy()
+        self._step_dt(Regu)
+        dcore = self.core - core_prev
+        relative_perturbation = self.tenpy.vecnorm(dcore) / self.tenpy.vecnorm(
+            self.core)
+        if self.pp_debug:
+            print(f"relative perturbation is {relative_perturbation}")
+        if relative_perturbation < self.tol_restart_dt:
+            self.pp = True
+            self.reinitialize_tree = True
+        return self.A
+
     def _solve_PP(self, i, Regu, N):
-        return n_mode_eigendec(self.tenpy, N, i, rank=self.R, do_flipsign=True)
+        return Tucker_DTALS_Optimizer._solve(self, i, Regu, N)
+
+    def _step_pp_subroutine(self, Regu):
+        print("***** pairwise perturbation step *****")
+        core_prev = self.core.copy()
+        for i in range(self.order):
+            output = self._pp_mode_update(Regu, i)
+            self.dA[i] += output - self.A[i]
+            self.A[i] = output
+
+        if self.dcore is None:
+            self.dcore = self.core - core_prev
+        else:
+            self.dcore += self.core - core_prev
+        relative_perturbation = self.tenpy.vecnorm(
+            self.dcore) / self.tenpy.vecnorm(self.core)
+        if self.pp_debug:
+            print(f"relative perturbation is {relative_perturbation}")
+        if relative_perturbation > self.tol_restart_pp:
+            self.pp = False
+            self.reinitialize_tree = False
+        return self.A
