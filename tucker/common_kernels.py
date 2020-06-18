@@ -18,8 +18,6 @@ def n_mode_eigendec(tenpy, T, n, rank, do_flipsign=True):
     Y = tenpy.einsum(einstr, T, T)
     N = Y.shape[0]
     _, _, V = tenpy.rsvd(Y, rank)
-    # _, _, V = tenpy.svd(Y)
-    # V = V[:rank, :]
 
     # flip sign
     if do_flipsign:

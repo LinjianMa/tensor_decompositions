@@ -49,7 +49,7 @@ def coil_100(tenpy):
 
     """
     parent_dir = join(dirname(__file__), os.pardir)
-    data_dir = join(parent_dir, 'data')
+    data_dir = join(parent_dir, 'saved-tensors')
 
     def create_bin():
         urls = [
@@ -81,7 +81,7 @@ def coil_100(tenpy):
 
     if tenpy.name() == 'ctf':
         return tenpy.from_nparray(pixels)
-    return pixels[:, :, :, 0]
+    return pixels[:, :, :, :]
 
 
 def time_lapse_images(tenpy):
@@ -94,7 +94,7 @@ def time_lapse_images(tenpy):
 
     """
     parent_dir = join(dirname(__file__), os.pardir)
-    data_dir = join(parent_dir, 'data')
+    data_dir = join(parent_dir, 'saved-tensors')
 
     def create_bin():
         urls = [
@@ -149,7 +149,7 @@ def time_lapse_images(tenpy):
 
     if tenpy.name() == 'ctf':
         return tenpy.from_nparray(pixels)
-    return pixels[0, :, :, :]
+    return pixels
 
 
 def get_scf_tensor(n=15):

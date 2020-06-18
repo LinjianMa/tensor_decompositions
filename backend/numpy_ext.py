@@ -95,6 +95,7 @@ def sparse_random(shape, begin, end, sp_frac):
     return tensor
 
 
+@backend_profiler(tag_names=['shape'], tag_inputs=[0])
 def vecnorm(T):
     return la.norm(np.ravel(T))
 

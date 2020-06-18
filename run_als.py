@@ -118,6 +118,7 @@ def Tucker_ALS(tenpy,
     optimizer = optimizer_list[method]
 
     normT = tenpy.vecnorm(T)
+    fitness_old = 0.
 
     for i in range(num_iter):
         if i % res_calc_freq == 0 or i == num_iter - 1 or not flag_dt:
@@ -126,12 +127,17 @@ def Tucker_ALS(tenpy,
                 save_decomposition_results(T, A, tenpy, folderpath)
             res = get_residual(tenpy, T, A)
             fitness = 1 - res / normT
+            d_fit = abs(fitness - fitness_old)
+            fitness_old = fitness
 
             if tenpy.is_master_proc():
-                print(f"[ {i} ] Residual is {res}, fitness is: {fitness}")
+                print(
+                    f"[ {i} ] Residual is {res}, fitness is: {fitness}, d_fit is: {d_fit}"
+                )
                 # write to csv file
                 if csv_file is not None:
-                    csv_writer.writerow([i, time_all, res, fitness, flag_dt])
+                    csv_writer.writerow(
+                        [i, time_all, res, fitness, flag_dt, d_fit])
                     csv_file.flush()
         t0 = time.time()
         if method == 'PP':
@@ -187,8 +193,10 @@ if __name__ == "__main__":
             print(arg + ':', getattr(args, arg))
         # initialize the csv file
         if is_new_log:
-            csv_writer.writerow(
-                ['iterations', 'time', 'residual', 'fitness', 'dt_step'])
+            csv_writer.writerow([
+                'iterations', 'time', 'residual', 'fitness', 'dt_step',
+                'perturbation'
+            ])
 
     tenpy.seed(args.seed)
 
