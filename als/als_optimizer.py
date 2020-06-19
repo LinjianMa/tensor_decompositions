@@ -13,6 +13,7 @@ class DTALS_base():
     def __init__(self, tenpy, T, A):
         self.tenpy = tenpy
         self.T = T
+        self.order = len(T.shape)
         self.A = A
         self.R = A[0].shape[1]
 

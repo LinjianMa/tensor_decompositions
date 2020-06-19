@@ -51,9 +51,21 @@ def mttkrp(tenpy, mat_list, T, i):
     return out_tensor
 
 
-def get_residual(tenpy, T, A):
-    t0 = time.time()
-    nrm = tenpy.vecnorm(T - khatri_rao_product_chain(tenpy, A))
+def get_residual(tenpy, mttkrp_last_mode, A, normT):
+    nrm_A = norm(tenpy, A)
+    inner_T_A = tenpy.sum(mttkrp_last_mode * A[-1])
+    nrm = np.sqrt(normT**2 + nrm_A**2 - 2. * inner_T_A)
     t1 = time.time()
-    tenpy.printf("Residual computation took", t1 - t0, "seconds")
     return nrm
+
+
+def norm(tenpy, factors):
+    return np.sqrt(inner(tenpy, factors, factors))
+
+
+def inner(tenpy, factors, other_factors):
+    hadamard_prod = tenpy.dot(factors[0], tenpy.transpose(other_factors[0]))
+    for i in range(1, len(factors)):
+        hadamard_prod *= tenpy.dot(factors[i],
+                                   tenpy.transpose(other_factors[i]))
+    return tenpy.sum(hadamard_prod)

@@ -57,17 +57,6 @@ def CP_ALS(tenpy,
     fitness_old = 0
     for i in range(num_iter):
 
-        if i % res_calc_freq == 0 or i == num_iter - 1 or not flag_dt:
-            res = get_residual(tenpy, T, A)
-            fitness = 1 - res / normT
-
-            if tenpy.is_master_proc():
-                print(f"[ {i} ] Residual is {res}, fitness is: {fitness}")
-                # write to csv file
-                if csv_file is not None:
-                    csv_writer.writerow([i, time_all, res, fitness, flag_dt])
-                    csv_file.flush()
-
         t0 = time.time()
         if method == 'PP':
             A, pp_restart = optimizer.step(Regu)
@@ -76,6 +65,17 @@ def CP_ALS(tenpy,
             A = optimizer.step(Regu)
         t1 = time.time()
         tenpy.printf(f"[ {i} ] Sweep took {t1 - t0} seconds")
+
+        if i % res_calc_freq == 0 or i == num_iter - 1 or not flag_dt:
+            res = get_residual(tenpy, optimizer.mttkrp_last_mode, A, normT)
+            fitness = 1 - res / normT
+
+            if tenpy.is_master_proc():
+                print(f"[ {i} ] Residual is {res}, fitness is: {fitness}")
+                # write to csv file
+                if csv_file is not None:
+                    csv_writer.writerow([i, time_all, res, fitness, flag_dt])
+                    csv_file.flush()
 
         time_all += t1 - t0
         fitness_old = fitness

@@ -39,6 +39,8 @@ class CP_DTALS_Optimizer(DTALS_base):
     def _solve(self, i, Regu, s):
         new_Ai = self.tenpy.solve(self.compute_lin_sys(i, Regu), s)
         self.ATA_hash[i] = self.tenpy.dot(new_Ai, self.tenpy.transpose(new_Ai))
+        if i == self.order - 1:
+            self.mttkrp_last_mode = s
         return new_Ai
 
 
