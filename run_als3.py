@@ -15,6 +15,7 @@ from os.path import dirname, join
 from cpd.als3 import als_optimizer, als_pp_optimizer
 from cpd.quad_als3 import quad_als_optimizer, quad_pp_optimizer
 from cpd.common_kernels import khatri_rao_product_chain, get_residual
+from backend import profiler
 
 parent_dir = dirname(__file__)
 results_dir = join(parent_dir, 'results')
@@ -23,6 +24,7 @@ results_dir = join(parent_dir, 'results')
 def get_file_prefix(args):
     return "-".join(
         filter(None, [
+            "als3",
             args.experiment_prefix,
             'R' + str(args.R),
             'lambda' + str(args.lam),
@@ -78,11 +80,6 @@ def run_als():
                         default=10,
                         metavar='int',
                         help='Number of molecules (default: 10)')
-    parser.add_argument('--use-correction', type=int, default=1, metavar='int')
-    parser.add_argument('--calculate-residual',
-                        type=int,
-                        default=1,
-                        metavar='int')
     parser.add_argument(
         '--method',
         default="DT",
@@ -124,8 +121,20 @@ def run_als():
                         type=int,
                         metavar='int',
                         help='number of iterations')
+    parser.add_argument('--res-calc-freq',
+                        default=5,
+                        type=int,
+                        metavar='int',
+                        help='residual calculation frequency (default: 5).')
+    parser.add_argument('--profile',
+                        action='store_true',
+                        help="Whether to profile the code.")
+    parser.add_argument('--pp-with-correction',
+                        action='store_true',
+                        help="Whether to use the correction term.")
 
     args, _ = parser.parse_known_args()
+    profiler.do_profile(args.profile)
 
     if args.backend == 'numpy':
         import backend.numpy_ext as tenpy
@@ -136,28 +145,24 @@ def run_als():
 
     R = args.R
     s = args.s
-    res_calc_freq = 5
+    res_calc_freq = args.res_calc_freq
 
     csv_path = join(results_dir, get_file_prefix(args) + '.csv')
     is_new_log = not Path(csv_path).exists()
-    csv_file = open(csv_path, 'a')  # , newline='')
+    csv_file = open(csv_path, 'a')
     csv_writer = csv.writer(csv_file,
                             delimiter=',',
                             quotechar='|',
                             quoting=csv.QUOTE_MINIMAL)
 
     if tenpy.is_master_proc():
-        # print the arguments
         for arg in vars(args):
             print(arg + ':', getattr(args, arg))
-        # initialize the csv file
         if is_new_log:
             csv_writer.writerow(
                 ['iterations', 'time', 'residual', 'fitness', ''])
 
     tenpy.seed(args.seed)
-    sizes = [s] * 3
-
     if args.tensor == 'random':
         X = tenpy.random((R, s))
         Y = tenpy.random((R, s))
@@ -183,7 +188,7 @@ def run_als():
             if tenpy.name() == 'ctf':
                 T = tenpy.from_nparray(T)
 
-    tenpy.printf("The shape of the input tensor is: ", T.shape)
+    tenpy.printf(f"The shape of the input tensor is: {T.shape}")
 
     X = tenpy.random((R, T.shape[0]))
     Y = tenpy.random((R, T.shape[1]))
@@ -209,16 +214,6 @@ def run_als():
 
     for i in range(args.num_iter):
         if args.method == 'PP-quad' or args.method == 'DT-quad':
-            if i % res_calc_freq == 0 or i == args.num_iter - 1 or not flag_dt:
-                res = get_residual(tenpy, T, [X, Y, Y])
-                fitness = 1 - res / normT
-                if tenpy.is_master_proc():
-                    print("[", i, "] Residual is", res, "fitness is: ",
-                          fitness)
-                    if csv_file is not None:
-                        csv_writer.writerow(
-                            [i, time_all, res, fitness, flag_dt])
-                        csv_file.flush()
             t0 = time.time()
             if args.method == 'PP-quad':
                 X, Y, pp_restart = optimizer.step()
@@ -226,28 +221,20 @@ def run_als():
             else:
                 X, Y = optimizer.step()
             t1 = time.time()
-            tenpy.printf("[", i, "] Sweep took", t1 - t0, "seconds")
+            tenpy.printf(f"[ {i} ] Sweep took {t1 - t0} seconds")
             time_all += t1 - t0
-        elif args.method == 'PP' or args.method == 'DT':
-            if (args.calculate_residual == 1) and (i % res_calc_freq == 0
-                                                   or i == args.num_iter - 1
-                                                   or not flag_dt):
-                res = get_residual(tenpy, T, [X, Y, Z])
+            if (i % res_calc_freq == 0 or i == args.num_iter - 1
+                    or not flag_dt):
+                res = get_residual(tenpy, optimizer.mttkrp_last_mode,
+                                   [X, Y, Y], normT)
                 fitness = 1 - res / normT
                 if tenpy.is_master_proc():
-                    print("[", i, "] Residual is", res, "fitness is: ",
-                          fitness)
+                    print(f"[ {i} ] Residual is {res}, fitness is: {fitness}")
                     if csv_file is not None:
                         csv_writer.writerow(
                             [i, time_all, res, fitness, flag_dt])
                         csv_file.flush()
-                print("timeall", time_all)
-                # check the fitness difference
-                if (i % res_calc_freq == 0):
-                    fitness_diff = fitness - fitness_old
-                    fitness_old = fitness
-                    if abs(fitness_diff) <= args.stopping_tol * res_calc_freq:
-                        return
+        elif args.method == 'PP' or args.method == 'DT':
             t0 = time.time()
             if args.method == 'PP':
                 X, Y, Z, pp_restart = optimizer.step()
@@ -255,10 +242,27 @@ def run_als():
             else:
                 X, Y, Z = optimizer.step()
             t1 = time.time()
-            tenpy.printf("[", i, "] Sweep took", t1 - t0, "seconds")
+            tenpy.printf(f"[ {i} ] Sweep took {t1 - t0} seconds")
             time_all += t1 - t0
-    print("timeall", time_all)
+            if (i % res_calc_freq == 0 or i == args.num_iter - 1
+                    or not flag_dt):
+                res = get_residual(tenpy, optimizer.mttkrp_last_mode,
+                                   [X, Y, Z], normT)
+                fitness = 1 - res / normT
+                if tenpy.is_master_proc():
+                    print(f"[ {i} ] Residual is {res}, fitness is: {fitness}")
+                    if csv_file is not None:
+                        csv_writer.writerow(
+                            [i, time_all, res, fitness, flag_dt])
+                        csv_file.flush()
+                # check the fitness difference
+                if (i % res_calc_freq == 0):
+                    fitness_diff = fitness - fitness_old
+                    fitness_old = fitness
+                    if abs(fitness_diff) <= args.stopping_tol * res_calc_freq:
+                        return
 
+    print("timeall", time_all)
     if args.backend == "ctf":
         tepoch.end()
 

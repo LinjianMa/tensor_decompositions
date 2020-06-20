@@ -4,12 +4,9 @@ import time, copy
 class als_optimizer():
     def __init__(self, tenpy, T, A, B, C, args):
         self.tenpy = tenpy
-        self.shape = T.shape
-        self.rank = A.shape[0]
         self.A = A
         self.B = B
         self.C = C
-        self.regu = 1e-7 * tenpy.eye(A.shape[1])
         self.lam = args.lam
         self.T = T
 
@@ -32,6 +29,7 @@ class als_optimizer():
         S = AA * BB
         self.C = (1 - lam) * self.C + lam * self.tenpy.solve(S, T_A_B)
 
+        self.mttkrp_last_mode = T_A_B
         return self.A, self.B, self.C
 
 
@@ -48,12 +46,12 @@ class als_pp_optimizer(als_optimizer):
         self.dB = tenpy.zeros((self.B.shape[0], self.B.shape[1]))
         self.dC = tenpy.zeros((self.C.shape[0], self.C.shape[1]))
         self.T_A0 = None
+        self.T_B0 = None
         self.T_C0 = None
         self.T_A0_B0 = None
         self.T_B0_C0 = None
         self.T_A0_C0 = None
-        self.regu = 1e-7 * tenpy.eye(A.shape[1])
-        self.use_correction = args.use_correction
+        self.use_correction = args.pp_with_correction
 
     def _step_dt(self):
         return als_optimizer.step(self)
@@ -62,12 +60,6 @@ class als_pp_optimizer(als_optimizer):
         """Initialize tree
         """
         t0 = time.time()
-        self._initialize_tree()
-        t1 = time.time()
-        self.tenpy.printf("tree initialization took", t1 - t0, "seconds")
-
-    def _initialize_tree(self):
-
         self.T_A0 = self.tenpy.einsum("abc,ka->kbc", self.T, self.A)
         self.T_B0 = self.tenpy.einsum("abc,kb->kac", self.T, self.B)
         self.T_C0 = self.tenpy.einsum("abc,kc->kab", self.T, self.C)
@@ -88,6 +80,9 @@ class als_pp_optimizer(als_optimizer):
         self.dA = self.tenpy.zeros((self.A.shape[0], self.A.shape[1]))
         self.dB = self.tenpy.zeros((self.B.shape[0], self.B.shape[1]))
         self.dC = self.tenpy.zeros((self.C.shape[0], self.C.shape[1]))
+
+        t1 = time.time()
+        self.tenpy.printf("tree initialization took", t1 - t0, "seconds")
 
     def _step_pp(self):
         print("***** pairwise perturbation step *****")
@@ -164,6 +159,8 @@ class als_pp_optimizer(als_optimizer):
         BB = self.tenpy.einsum("ab,cb->ac", self.B, self.B)
         S = BB * AA
         C_new = (1 - lam) * self.C + lam * self.tenpy.solve(S, M)
+
+        self.mttkrp_last_mode = M
         self.dC = self.dC + C_new - self.C
         self.C = C_new
 
