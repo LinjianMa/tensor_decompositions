@@ -89,7 +89,7 @@ def add_general_arguments(parser):
                         default=1,
                         metavar='int',
                         help='random seed')
-    parser.add_argument('--tol',
+    parser.add_argument('--stopping-tol',
                         default=1e-5,
                         type=float,
                         metavar='float',

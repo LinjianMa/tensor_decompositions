@@ -29,6 +29,8 @@ def CP_ALS(tenpy,
            args=None,
            res_calc_freq=1):
 
+    ret_list = []
+
     from cpd.common_kernels import get_residual
     from cpd.als import CP_DTALS_Optimizer, CP_PPALS_Optimizer, CP_partialPPALS_Optimizer
 
@@ -65,20 +67,30 @@ def CP_ALS(tenpy,
             A = optimizer.step(Regu)
         t1 = time.time()
         tenpy.printf(f"[ {i} ] Sweep took {t1 - t0} seconds")
+        time_all += t1 - t0
 
         if i % res_calc_freq == 0 or i == num_iter - 1 or not flag_dt:
             res = get_residual(tenpy, optimizer.mttkrp_last_mode, A, normT)
             fitness = 1 - res / normT
+            fitness_diff = abs(fitness - fitness_old)
+            fitness_old = fitness
 
             if tenpy.is_master_proc():
-                print(f"[ {i} ] Residual is {res}, fitness is: {fitness}")
-                # write to csv file
+                ret_list.append(
+                    [i, time_all, res, fitness, flag_dt, fitness_diff])
+                tenpy.printf(
+                    f"[ {i} ] Residual is {res}, fitness is: {fitness}, fitness diff is: {fitness_diff}, timeall is: {time_all}"
+                )
                 if csv_file is not None:
-                    csv_writer.writerow([i, time_all, res, fitness, flag_dt])
+                    csv_writer.writerow(
+                        [i, time_all, res, fitness, flag_dt, fitness_diff])
                     csv_file.flush()
-
-        time_all += t1 - t0
-        fitness_old = fitness
+            # check the fitness difference
+            if (i % res_calc_freq == 0):
+                if abs(fitness_diff) <= args.stopping_tol * res_calc_freq:
+                    tenpy.printf(
+                        f"{method} method took {time_all} seconds overall")
+                    return ret_list
 
     tenpy.printf(f"{method} method took {time_all} seconds overall")
 
@@ -86,7 +98,7 @@ def CP_ALS(tenpy,
         folderpath = join(results_dir, arg_defs.get_file_prefix(args))
         save_decomposition_results(T, A, tenpy, folderpath)
 
-    return res
+    return ret_list
 
 
 def Tucker_ALS(tenpy,
@@ -153,14 +165,7 @@ def Tucker_ALS(tenpy,
     return A, res
 
 
-if __name__ == "__main__":
-
-    parser = argparse.ArgumentParser()
-    arg_defs.add_general_arguments(parser)
-    arg_defs.add_pp_arguments(parser)
-    arg_defs.add_col_arguments(parser)
-    args, _ = parser.parse_known_args()
-
+def run_als(args):
     # Set up CSV logging
     csv_path = join(results_dir, arg_defs.get_file_prefix(args) + '.csv')
     is_new_log = not Path(csv_path).exists()
@@ -188,14 +193,12 @@ if __name__ == "__main__":
         tepoch.begin()
 
     if tenpy.is_master_proc():
-        # print the arguments
         for arg in vars(args):
             print(arg + ':', getattr(args, arg))
-        # initialize the csv file
         if is_new_log:
             csv_writer.writerow([
-                'iterations', 'time', 'residual', 'fitness', 'dt_step',
-                'perturbation'
+                'iterations', 'time', 'residual', 'fitness', 'flag_dt',
+                'fitness_diff'
             ])
 
     tenpy.seed(args.seed)
@@ -255,18 +258,31 @@ if __name__ == "__main__":
                                               T,
                                               args.hosvd_core_dim,
                                               compute_core=True)
-            CP_ALS(tenpy, A, compressed_T, 100, csv_file, Regu, 'DT', args,
-                   args.res_calc_freq)
+            ret_list = CP_ALS(tenpy, A, compressed_T, 100, csv_file, Regu,
+                              'DT', args, args.res_calc_freq)
             A_fullsize = []
             for i in range(T.ndim):
                 A_fullsize.append(tenpy.dot(transformer[i], A[i]))
-            CP_ALS(tenpy, A_fullsize, T, num_iter, csv_file, Regu, args.method,
-                   args, args.res_calc_freq)
+            ret_list = CP_ALS(tenpy, A_fullsize, T, num_iter, csv_file, Regu,
+                              args.method, args, args.res_calc_freq)
         else:
-            CP_ALS(tenpy, A, T, num_iter, csv_file, Regu, args.method, args,
-                   args.res_calc_freq)
+            ret_list = CP_ALS(tenpy, A, T, num_iter, csv_file, Regu,
+                              args.method, args, args.res_calc_freq)
     elif args.decomposition == "Tucker":
         Tucker_ALS(tenpy, A, T, num_iter, csv_file, Regu, args.method, args,
                    args.res_calc_freq)
+        ret_list = None
+
     if backend == "ctf":
         tepoch.end()
+    return ret_list
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    arg_defs.add_general_arguments(parser)
+    arg_defs.add_pp_arguments(parser)
+    arg_defs.add_col_arguments(parser)
+    args, _ = parser.parse_known_args()
+
+    run_als(args)
