@@ -11,8 +11,13 @@ class quad_als_optimizer():
         self.T = T
         self.A = A
         self.B = B
+        self.num_iters_map = {"dt": 0, "ppinit": 0, "ppapprox": 0}
+        self.time_map = {"dt": 0., "ppinit": 0., "ppapprox": 0.}
+        self.pp_init_iter = 0
 
     def step(self):
+        self.num_iters_map["dt"] += 1
+        t0 = time.time()
 
         T_B = self.tenpy.einsum("abc,kc->kab", self.T, self.B)
         M = self.tenpy.einsum("aij,aj->ai", T_B, self.B)
@@ -30,6 +35,10 @@ class quad_als_optimizer():
             self.B = lam * self.B + (1 - lam) * self.tenpy.solve(S, MM)
 
         self.mttkrp_last_mode = MM
+        dt = time.time() - t0
+        self.time_map["dt"] = (self.time_map["dt"] *
+                               (self.num_iters_map["dt"] - 1) +
+                               dt) / self.num_iters_map["dt"]
         return self.A, self.B
 
 
@@ -58,6 +67,7 @@ class quad_pp_optimizer(quad_als_optimizer):
 
         self.T_A0 = self.tenpy.einsum("ijk,ai->ajk", self.T, self.A)
         self.T_B0 = self.tenpy.einsum("ijk,ak->aij", self.T, self.B)
+        self.T_B0_trans = self.tenpy.transpose(self.T_B0, (0, 2, 1))
         self.T_A0_B0 = self.tenpy.einsum("ajk,ak->aj", self.T_A0, self.B)
         self.T_B0_B0 = self.tenpy.einsum("aij,aj->ai", self.T_B0, self.B)
         self.dA = self.tenpy.zeros((self.A.shape[0], self.A.shape[1]))
@@ -99,17 +109,18 @@ class quad_pp_optimizer(quad_als_optimizer):
 
         AA = self.tenpy.einsum("ab,cb->ac", self.A, self.A)
         max_approx = 5
+
+        T_B0_dA = self.tenpy.einsum("kba,ka->kb", self.T_B0_trans, self.dA)
+        M0 = self.T_A0_B0 + T_B0_dA
+        dAA = self.tenpy.einsum("ab,cb->ac", self.dA, self.A)
         for i in range(max_approx):
             lam = .2
             S = AA * self.tenpy.einsum("ab,cb->ac", self.B, self.B)
-            M = self.T_A0_B0 + self.tenpy.einsum(
-                "kab,kb->ka", self.T_A0, self.dB) + self.tenpy.einsum(
-                    "kab,ka->kb", self.T_B0, self.dA)
+            M = M0 + self.tenpy.einsum("kab,kb->ka", self.T_A0, self.dB)
             if self.use_correction:
                 # correction step
-                M += self.tenpy.einsum(
-                    "ab,cb->ac", self.dA, self.A) * self.tenpy.einsum(
-                        "ab,cb->ac", self.dB, self.B) @ self.B
+                M += dAA * self.tenpy.einsum("ab,cb->ac", self.dB,
+                                             self.B) @ self.B
             B_new = lam * self.B + (1 - lam) * self.tenpy.solve(S, M)
             self.dB = self.dB + B_new - self.B
             self.B = B_new
@@ -140,10 +151,29 @@ class quad_pp_optimizer(quad_als_optimizer):
         restart = False
         if self.pp:
             if self.reinitialize_tree:
+                # record the init pp iter
+                if self.pp_init_iter == 0:
+                    self.pp_init_iter = self.num_iters_map["dt"]
                 restart = True
+                t0 = time.time()
                 self._initialize_tree()
+                A, B = self._step_pp()
+                dt_init = time.time() - t0
                 self.reinitialize_tree = False
-            A, B = self._step_pp()
+                self.num_iters_map["ppinit"] += 1
+                self.time_map["ppinit"] = (
+                    self.time_map["ppinit"] *
+                    (self.num_iters_map["ppinit"] - 1) +
+                    dt_init) / self.num_iters_map["ppinit"]
+            else:
+                t0 = time.time()
+                A, B = self._step_pp()
+                dt_approx = time.time() - t0
+                self.num_iters_map["ppapprox"] += 1
+                self.time_map["ppapprox"] = (
+                    self.time_map["ppapprox"] *
+                    (self.num_iters_map["ppapprox"] - 1) +
+                    dt_approx) / self.num_iters_map["ppapprox"]
         else:
             A, B = self._step_dt_subroutine()
         return A, B, restart

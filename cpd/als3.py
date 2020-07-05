@@ -9,8 +9,13 @@ class als_optimizer():
         self.C = C
         self.lam = args.lam
         self.T = T
+        self.num_iters_map = {"dt": 0, "ppinit": 0, "ppapprox": 0}
+        self.time_map = {"dt": 0., "ppinit": 0., "ppapprox": 0.}
+        self.pp_init_iter = 0
 
     def step(self):
+        self.num_iters_map["dt"] += 1
+        t0 = time.time()
         lam = self.lam
 
         T_C = self.tenpy.einsum("abc,kc->kab", self.T, self.C)
@@ -30,6 +35,10 @@ class als_optimizer():
         self.C = (1 - lam) * self.C + lam * self.tenpy.solve(S, T_A_B)
 
         self.mttkrp_last_mode = T_A_B
+        dt = time.time() - t0
+        self.time_map["dt"] = (self.time_map["dt"] *
+                               (self.num_iters_map["dt"] - 1) +
+                               dt) / self.num_iters_map["dt"]
         return self.A, self.B, self.C
 
 
@@ -192,10 +201,29 @@ class als_pp_optimizer(als_optimizer):
         restart = False
         if self.pp:
             if self.reinitialize_tree:
+                # record the init pp iter
+                if self.pp_init_iter == 0:
+                    self.pp_init_iter = self.num_iters_map["dt"]
                 restart = True
+                t0 = time.time()
                 self._initialize_tree()
+                A, B, C = self._step_pp()
+                dt_init = time.time() - t0
                 self.reinitialize_tree = False
-            A, B, C = self._step_pp()
+                self.num_iters_map["ppinit"] += 1
+                self.time_map["ppinit"] = (
+                    self.time_map["ppinit"] *
+                    (self.num_iters_map["ppinit"] - 1) +
+                    dt_init) / self.num_iters_map["ppinit"]
+            else:
+                t0 = time.time()
+                A, B, C = self._step_pp()
+                dt_approx = time.time() - t0
+                self.num_iters_map["ppapprox"] += 1
+                self.time_map["ppapprox"] = (
+                    self.time_map["ppapprox"] *
+                    (self.num_iters_map["ppapprox"] - 1) +
+                    dt_approx) / self.num_iters_map["ppapprox"]
         else:
             A, B, C = self._step_dt_subroutine()
         return A, B, C, restart

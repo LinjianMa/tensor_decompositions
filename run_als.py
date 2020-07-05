@@ -90,7 +90,7 @@ def CP_ALS(tenpy,
                 if abs(fitness_diff) <= args.stopping_tol * res_calc_freq:
                     tenpy.printf(
                         f"{method} method took {time_all} seconds overall")
-                    return ret_list
+                    return ret_list, optimizer.num_iters_map, optimizer.time_map, optimizer.pp_init_iter
 
     tenpy.printf(f"{method} method took {time_all} seconds overall")
 
@@ -98,7 +98,7 @@ def CP_ALS(tenpy,
         folderpath = join(results_dir, arg_defs.get_file_prefix(args))
         save_decomposition_results(T, A, tenpy, folderpath)
 
-    return ret_list
+    return ret_list, optimizer.num_iters_map, optimizer.time_map, optimizer.pp_init_iter
 
 
 def Tucker_ALS(tenpy,
@@ -258,24 +258,27 @@ def run_als(args):
                                               T,
                                               args.hosvd_core_dim,
                                               compute_core=True)
-            ret_list = CP_ALS(tenpy, A, compressed_T, 100, csv_file, Regu,
-                              'DT', args, args.res_calc_freq)
+            ret_list, num_iters_map, time_map, pp_init_iter = CP_ALS(
+                tenpy, A, compressed_T, 100, csv_file, Regu, 'DT', args,
+                args.res_calc_freq)
             A_fullsize = []
             for i in range(T.ndim):
                 A_fullsize.append(tenpy.dot(transformer[i], A[i]))
-            ret_list = CP_ALS(tenpy, A_fullsize, T, num_iter, csv_file, Regu,
-                              args.method, args, args.res_calc_freq)
+            ret_list, num_iters_map, time_map, pp_init_iter = CP_ALS(
+                tenpy, A_fullsize, T, num_iter, csv_file, Regu, args.method,
+                args, args.res_calc_freq)
         else:
-            ret_list = CP_ALS(tenpy, A, T, num_iter, csv_file, Regu,
-                              args.method, args, args.res_calc_freq)
+            ret_list, num_iters_map, time_map, pp_init_iter = CP_ALS(
+                tenpy, A, T, num_iter, csv_file, Regu, args.method, args,
+                args.res_calc_freq)
     elif args.decomposition == "Tucker":
         Tucker_ALS(tenpy, A, T, num_iter, csv_file, Regu, args.method, args,
                    args.res_calc_freq)
-        ret_list = None
+        ret_list, num_iters_map, time_map, pp_init_iter = None, None, None, None
 
     if backend == "ctf":
         tepoch.end()
-    return ret_list
+    return ret_list, num_iters_map, time_map, pp_init_iter
 
 
 if __name__ == "__main__":

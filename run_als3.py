@@ -28,6 +28,7 @@ def get_file_prefix(args):
             args.experiment_prefix,
             'R' + str(args.R),
             'lambda' + str(args.lam),
+            'tensor' + args.tensor,
             args.method,
         ]))
 
@@ -144,7 +145,7 @@ def run_als(args):
                 # check the fitness difference
                 if (i % res_calc_freq == 0):
                     if abs(fitness_diff) <= args.stopping_tol * res_calc_freq:
-                        return ret_list
+                        return ret_list, optimizer.num_iters_map, optimizer.time_map, optimizer.pp_init_iter
         elif args.method == 'PP' or args.method == 'DT':
             t0 = time.time()
             if args.method == 'PP':
@@ -176,12 +177,12 @@ def run_als(args):
                 if (i % res_calc_freq == 0):
                     if abs(fitness_diff) <= args.stopping_tol * res_calc_freq:
                         print("timeall", time_all)
-                        return ret_list
+                        return ret_list, optimizer.num_iters_map, optimizer.time_map, optimizer.pp_init_iter
 
     print("timeall", time_all)
     if args.backend == "ctf":
         tepoch.end()
-    return ret_list
+    return ret_list, optimizer.num_iters_map, optimizer.time_map, optimizer.pp_init_iter
 
 
 if __name__ == "__main__":

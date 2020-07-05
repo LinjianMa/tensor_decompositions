@@ -16,6 +16,9 @@ class DTALS_base():
         self.order = len(T.shape)
         self.A = A
         self.R = A[0].shape[1]
+        self.num_iters_map = {"dt": 0, "ppinit": 0, "ppapprox": 0}
+        self.time_map = {"dt": 0., "ppinit": 0., "ppapprox": 0.}
+        self.pp_init_iter = 0
 
     @abc.abstractmethod
     def _einstr_builder(self, M, s, ii):
@@ -26,6 +29,9 @@ class DTALS_base():
         return
 
     def step(self, Regu):
+        self.num_iters_map["dt"] += 1
+        t0 = time.time()
+
         q = queue.Queue()
         for i in range(len(self.A)):
             q.put(i)
@@ -49,6 +55,11 @@ class DTALS_base():
                 ss.remove(ii)
                 s.append((ss, N))
             self.A[i] = self._solve(i, Regu, s[-1][1])
+
+        dt = time.time() - t0
+        self.time_map["dt"] = (self.time_map["dt"] *
+                               (self.num_iters_map["dt"] - 1) +
+                               dt) / self.num_iters_map["dt"]
         return self.A
 
 
@@ -86,6 +97,9 @@ class PPALS_base():
         for i in range(self.order):
             self.dA.append(
                 tenpy.zeros((self.A[i].shape[0], self.A[i].shape[1])))
+        self.num_iters_map = {"dt": 0, "ppinit": 0, "ppapprox": 0}
+        self.time_map = {"dt": 0., "ppinit": 0., "ppapprox": 0.}
+        self.pp_init_iter = 0
 
     @abc.abstractmethod
     def _step_dt(self, Regu):
@@ -255,10 +269,33 @@ class PPALS_base():
         restart = False
         if self.pp:
             if self.reinitialize_tree:
+                # record the init pp iter
+                if self.pp_init_iter == 0:
+                    self.pp_init_iter = self.num_iters_map["dt"]
                 restart = True
+                t0 = time.time()
+
                 self._initialize_tree()
+                A = self._step_pp_subroutine(Regu)
+
+                dt_init = time.time() - t0
                 self.reinitialize_tree = False
-            A = self._step_pp_subroutine(Regu)
+                self.num_iters_map["ppinit"] += 1
+                self.time_map["ppinit"] = (
+                    self.time_map["ppinit"] *
+                    (self.num_iters_map["ppinit"] - 1) +
+                    dt_init) / self.num_iters_map["ppinit"]
+            else:
+                t0 = time.time()
+
+                A = self._step_pp_subroutine(Regu)
+
+                dt_approx = time.time() - t0
+                self.num_iters_map["ppapprox"] += 1
+                self.time_map["ppapprox"] = (
+                    self.time_map["ppapprox"] *
+                    (self.num_iters_map["ppapprox"] - 1) +
+                    dt_approx) / self.num_iters_map["ppapprox"]
         else:
             A = self._step_dt_subroutine(Regu)
         return A, restart
