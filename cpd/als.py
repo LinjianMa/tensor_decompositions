@@ -190,9 +190,9 @@ class CP_partialPPALS_Optimizer(partialPP_ALS_base, CP_DTALS_Optimizer):
         if len(parent_nodeindex) != self.order:
             ci = "R"
 
-        str1 = "".join([chr(ord('a') + j) for j in parent_nodeindex]) + ci
-        str2 = (chr(ord('a') + contract_index)) + "R"
-        str3 = "".join([chr(ord('a') + j) for j in nodeindex]) + "R"
+        str1 = ci + "".join([chr(ord('a') + j) for j in parent_nodeindex])
+        str2 = "R" + (chr(ord('a') + contract_index))
+        str3 = "R" + "".join([chr(ord('a') + j) for j in nodeindex])
         einstr = str1 + "," + str2 + "->" + str3
         return einstr
 
@@ -200,5 +200,4 @@ class CP_partialPPALS_Optimizer(partialPP_ALS_base, CP_DTALS_Optimizer):
         return CP_DTALS_Optimizer.step(self, Regu)
 
     def _solve_PP(self, i, Regu, N):
-        return solve_sys(self.tenpy,
-                         compute_lin_sysN(self.tenpy, self.A, i, Regu), N)
+        return CP_DTALS_Optimizer._solve(self, i, Regu, N)

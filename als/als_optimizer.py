@@ -318,16 +318,14 @@ class partialPP_ALS_base():
         order (int): order of the input tensor.
         dA (list): list of perturbation terms.
         A0 (list): list of factorized matrices for previous steps.
-
-
     """
     def __init__(self, tenpy, T, A, args):
 
         self.tenpy = tenpy
         self.T = T
         self.dA = []
-        self.A0 = A[:]
-        self.A = A[:]
+        self.A0 = A.copy()
+        self.A = A.copy()
         self.order = len(self.A)
         for i in range(self.order):
             self.dA.append(tenpy.zeros((A[i].shape[0], A[i].shape[1])))
@@ -514,7 +512,9 @@ class partialPP_ALS_base():
 
         num_smallupdate = 0
         for i in range(self.order - 3, self.order):
-            if self.tenpy.sum(self.dA[i]**2)**.5 > self.tol_restart_dt:
+            relative_perturbation = self.tenpy.vecnorm(
+                self.dA[i]) / self.tenpy.vecnorm(self.A[i])
+            if relative_perturbation > self.tol_restart_dt:
                 num_smallupdate += 1
 
         if num_smallupdate > 0:
@@ -538,7 +538,9 @@ class partialPP_ALS_base():
         num_smallupdate = 0
         for i in range(self.order):
             self.dA[i] = self.A[i] - A_prev[i]
-            if self.tenpy.sum(self.dA[i]**2)**.5 < self.tol_restart_dt:
+            relative_perturbation = self.tenpy.vecnorm(
+                self.dA[i]) / self.tenpy.vecnorm(self.A[i])
+            if relative_perturbation < self.tol_restart_dt:
                 num_smallupdate += 1
 
         if num_smallupdate == self.order:
