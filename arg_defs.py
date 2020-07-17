@@ -63,8 +63,10 @@ def add_general_arguments(parser):
         '--method',
         default="DT",
         metavar='string',
-        choices=['DT', 'PP', 'partialPP'],
-        help='choose the optimization method: DT, PP, partialPP (default: DT)')
+        choices=['DT', 'PP', 'PPsimulate', 'partialPP'],
+        help=
+        'choose the optimization method: DT, PP, PPsimulate, partialPP (default: DT)'
+    )
     parser.add_argument(
         '--decomposition',
         default="CP",
@@ -124,6 +126,11 @@ def add_pp_arguments(parser):
         help=
         'used in pairwise perturbation optimizer, tolerance for dimention tree restart'
     )
+    parser.add_argument('--pplevel',
+                        default=0,
+                        type=int,
+                        metavar='int',
+                        help='pp level used in the simulator')
     parser.add_argument('--pp-with-correction',
                         action='store_true',
                         help="Whether to use the correction term.")

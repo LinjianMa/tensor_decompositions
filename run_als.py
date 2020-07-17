@@ -32,7 +32,7 @@ def CP_ALS(tenpy,
     ret_list = []
 
     from cpd.common_kernels import get_residual
-    from cpd.als import CP_DTALS_Optimizer, CP_PPALS_Optimizer, CP_partialPPALS_Optimizer
+    from cpd.als import CP_DTALS_Optimizer, CP_PPALS_Optimizer, CP_PPsimulate_Optimizer, CP_partialPPALS_Optimizer
 
     flag_dt = True
 
@@ -52,6 +52,7 @@ def CP_ALS(tenpy,
         optimizer_list = {
             'DT': CP_DTALS_Optimizer(tenpy, T, A),
             'PP': CP_PPALS_Optimizer(tenpy, T, A, args),
+            'PPsimulate': CP_PPsimulate_Optimizer(tenpy, T, A, args),
             'partialPP': CP_partialPPALS_Optimizer(tenpy, T, A, args),
         }
         optimizer = optimizer_list[method]
