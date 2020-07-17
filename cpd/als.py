@@ -224,7 +224,9 @@ class CP_PPALS_Optimizer(PPALS_base, CP_DTALS_Optimizer):
                 f"relative norm of X is {self.tenpy.vecnorm(N-N_dt) / self.tenpy.vecnorm(N_dt)}"
             )
 
-        new_Ai = CP_DTALS_Optimizer._solve(self, i, Regu, N)
+        new_Ai = self.tenpy.solve(CP_DTALS_Optimizer.compute_lin_sys(self, i, Regu), N)
+        if i == self.order - 1:
+            self.mttkrp_last_mode = N
         new_dAi = new_Ai - self.A[i] + self.dA[i]
         if self.with_correction:
             self.dATA_hash[i] = self.tenpy.dot(new_dAi,
@@ -236,16 +238,19 @@ class CP_PPALS_Optimizer(PPALS_base, CP_DTALS_Optimizer):
         for i in range(self.order):
             output = self._pp_mode_update(Regu, i)
             self.dA[i] += output - self.A[i]
-            self.A[i] = output
 
             relative_perturbation = self.tenpy.vecnorm(
                 self.dA[i]) / self.tenpy.vecnorm(self.A[i])
             if self.pp_debug:
-                print(f"relative perturbation is {relative_perturbation}")
+                print(f"pp relative perturbation is {relative_perturbation}")
             if relative_perturbation > self.tol_restart_pp:
                 self.pp = False
                 self.reinitialize_tree = False
+                print(f"incomplete pp with i = {i}")
                 break
+            self.ATA_hash[i] = self.tenpy.dot(output, self.tenpy.transpose(output))
+            self.A[i] = output
+
         return self.A
 
     def _step_dt_subroutine(self, Regu):
@@ -257,7 +262,7 @@ class CP_PPALS_Optimizer(PPALS_base, CP_DTALS_Optimizer):
             relative_perturbation = self.tenpy.vecnorm(
                 self.dA[i]) / self.tenpy.vecnorm(self.A[i])
             if self.pp_debug:
-                print(f"relative perturbation is {relative_perturbation}")
+                print(f"dt relative perturbation is {relative_perturbation}")
             if relative_perturbation < self.tol_restart_dt:
                 num_smallupdate += 1
 

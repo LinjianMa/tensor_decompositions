@@ -23,7 +23,7 @@ class Arguments():
         self.tol_restart_dt = 0.1
         self.lam = 1.
         self.num_iter = num_iter
-        self.res_calc_freq = 20
+        self.res_calc_freq = 1
         self.profile = False
         self.pp_with_correction = True
         self.experiment_prefix = f"correction-{self.pp_with_correction}-tol-restart-dt-{self.tol_restart_dt}"
@@ -34,6 +34,7 @@ class Arguments():
         self.pp_debug = False
         self.save_tensor = False
         self.num_molecule = 8
+        self.pplevel = 0
 
         self.order = order
         self.tensor = tensor

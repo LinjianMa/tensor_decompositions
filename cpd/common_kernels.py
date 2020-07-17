@@ -55,7 +55,13 @@ def get_residual(tenpy, mttkrp_last_mode, A, normT):
     nrm_A = norm(tenpy, A)
     inner_T_A = tenpy.sum(mttkrp_last_mode * A[-1])
     nrm = np.sqrt(normT**2 + nrm_A**2 - 2. * inner_T_A)
-    t1 = time.time()
+    return nrm
+
+
+def get_residual_naive(tenpy, T, A):
+    t0 = time.time()
+    nrm = tenpy.vecnorm(T - khatri_rao_product_chain(tenpy, A))
+    tenpy.printf("Residual computation took", time.time() - t0, "seconds")
     return nrm
 
 
