@@ -63,7 +63,7 @@ def add_general_arguments(parser):
         '--method',
         default="DT",
         metavar='string',
-        choices=['DT', 'PP', 'PPsimulate', 'partialPP'],
+        choices=['DT', 'PP', 'PPsimulate', 'partialPP', 'Leverage'],
         help=
         'choose the optimization method: DT, PP, PPsimulate, partialPP (default: DT)'
     )

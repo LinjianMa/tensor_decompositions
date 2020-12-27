@@ -219,6 +219,7 @@ def argmax(A, axis=0):
     return abs(A).argmax(axis=axis)
 
 
+@backend_profiler(tag_names=['shape'], tag_inputs=[0])
 def qr(A):
     return la.qr(A)
 

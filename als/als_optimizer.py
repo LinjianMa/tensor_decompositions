@@ -63,6 +63,57 @@ class DTALS_base():
         return self.A
 
 
+def leverage_scores(tenpy, A):
+    """
+    Leverage scores of the matrix A
+    """
+    q, _ = tenpy.qr(A)
+    return np.asarray([q[i:] @ q[i:] for i in range(q.shape[0])])
+
+
+@six.add_metaclass(abc.ABCMeta)
+class ALS_leverage_base():
+    def __init__(self, tenpy, T, A, args):
+        self.tenpy = tenpy
+        self.T = T
+        self.order = len(T.shape)
+        self.A = A
+        self.R = A[0].shape[1]
+        self.epsilon = args.epsilon
+        self.outer_iter = args.outer_iter
+        self.p_distributions = [
+            leverage_scores(A[i]) / self.R for i in self.order
+        ]
+        self.sample_size = self.R**(self.order - 1) / (self.epsilon**2)
+        tenpy.printf(f"Leverage sample size is {self.sample_size}")
+
+    @abc.abstractmethod
+    def _solve(self, i, Regu, s):
+        return
+
+    def sample_krp_leverage(self, k):
+        return
+
+    def krp_sample(self, k, idx, weights):
+        return
+
+    def tensor_sample(self, k, idx, weights):
+        return
+
+    def step(self, Regu):
+        for l in range(self.outer_iter):
+            for k in range(self.order):
+                # get the sampling indices
+                idx, weights = self.sample_krp_leverage(
+                    self.p_distributions, k, self.sample_size)
+                # get the sampled lhs and rhs
+                Z = self.krp_sample(self.A, k, idx, weights)
+                X = self.tensor_sample(self.T, k, idx, weights)
+                self._solve(Z, X, k)
+                self.p_distributions[k] = leverage_scores(A[k]) / self.R
+        return self.A
+
+
 @six.add_metaclass(abc.ABCMeta)
 class PPALS_base():
     """Pairwise perturbation optimizer

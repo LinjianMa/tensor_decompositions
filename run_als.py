@@ -54,6 +54,7 @@ def CP_ALS(tenpy,
             'PP': CP_PPALS_Optimizer(tenpy, T, A, args),
             'PPsimulate': CP_PPsimulate_Optimizer(tenpy, T, A, args),
             'partialPP': CP_partialPPALS_Optimizer(tenpy, T, A, args),
+            'Leverage': CP_leverage_Optimizer(tenpy, T, A, args),
         }
         optimizer = optimizer_list[method]
 

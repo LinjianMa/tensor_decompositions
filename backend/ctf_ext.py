@@ -127,6 +127,11 @@ def cholesky(A):
     return ctf.cholesky(A)
 
 
+@backend_profiler(tag_names=['shape'], tag_inputs=[0])
+def qr(A):
+    return ctf.qr(q)
+
+
 def solve_tri(A, B, lower=True, from_left=False, transp_L=False):
     return ctf.solve_tri(A, B, lower, from_left, transp_L)
 

@@ -224,7 +224,8 @@ class CP_PPALS_Optimizer(PPALS_base, CP_DTALS_Optimizer):
                 f"relative norm of X is {self.tenpy.vecnorm(N-N_dt) / self.tenpy.vecnorm(N_dt)}"
             )
 
-        new_Ai = self.tenpy.solve(CP_DTALS_Optimizer.compute_lin_sys(self, i, Regu), N)
+        new_Ai = self.tenpy.solve(
+            CP_DTALS_Optimizer.compute_lin_sys(self, i, Regu), N)
         if i == self.order - 1:
             self.mttkrp_last_mode = N
         new_dAi = new_Ai - self.A[i] + self.dA[i]
@@ -248,7 +249,8 @@ class CP_PPALS_Optimizer(PPALS_base, CP_DTALS_Optimizer):
                 self.reinitialize_tree = False
                 print(f"incomplete pp with i = {i}")
                 break
-            self.ATA_hash[i] = self.tenpy.dot(output, self.tenpy.transpose(output))
+            self.ATA_hash[i] = self.tenpy.dot(output,
+                                              self.tenpy.transpose(output))
             self.A[i] = output
 
         return self.A
