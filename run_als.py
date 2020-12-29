@@ -32,7 +32,8 @@ def CP_ALS(tenpy,
     ret_list = []
 
     from cpd.common_kernels import get_residual, get_residual_naive
-    from cpd.als import CP_DTALS_Optimizer, CP_PPALS_Optimizer, CP_PPsimulate_Optimizer, CP_partialPPALS_Optimizer
+    from cpd.als import CP_DTALS_Optimizer, CP_leverage_Optimizer
+    from cpd.als import CP_PPALS_Optimizer, CP_PPsimulate_Optimizer, CP_partialPPALS_Optimizer
 
     flag_dt = True
 
@@ -72,8 +73,10 @@ def CP_ALS(tenpy,
         time_all += t1 - t0
 
         if i % res_calc_freq == 0 or i == num_iter - 1 or not flag_dt:
-            # res = get_residual_naive(tenpy, T, A)
-            res = get_residual(tenpy, optimizer.mttkrp_last_mode, A, normT)
+            if method == 'Leverage':
+                res = get_residual_naive(tenpy, T, A)
+            else:
+                res = get_residual(tenpy, optimizer.mttkrp_last_mode, A, normT)
             fitness = 1 - res / normT
             fitness_diff = abs(fitness - fitness_old)
             fitness_old = fitness
@@ -289,6 +292,7 @@ if __name__ == "__main__":
     arg_defs.add_general_arguments(parser)
     arg_defs.add_pp_arguments(parser)
     arg_defs.add_col_arguments(parser)
+    arg_defs.add_leverage_sampling_arguments(parser)
     args, _ = parser.parse_known_args()
 
     run_als(args)

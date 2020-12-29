@@ -1,8 +1,24 @@
 import time
 import numpy as np
-from als.als_optimizer import DTALS_base, PPALS_base, partialPP_ALS_base
+from als.als_optimizer import DTALS_base, ALS_leverage_base, PPALS_base, partialPP_ALS_base
 from backend import numpy_ext
 from .common_kernels import sub_lists, mttkrp, khatri_rao_product_chain
+
+
+class CP_leverage_Optimizer(ALS_leverage_base):
+    def __init__(self, tenpy, T, A, args):
+        ALS_leverage_base.__init__(self, tenpy, T, A, args)
+
+    def _solve(self, lhs, rhs, k):
+        self.A[k] = self.tenpy.solve(
+            self.tenpy.transpose(lhs) @ lhs,
+            self.tenpy.transpose(lhs) @ rhs)
+
+    def _form_lhs(self, list_a):
+        out = self.tenpy.ones(list_a[0].shape)
+        for a in list_a:
+            out *= a
+        return out
 
 
 class CP_DTALS_Optimizer(DTALS_base):

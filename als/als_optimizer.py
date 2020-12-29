@@ -67,8 +67,8 @@ def leverage_scores(tenpy, A):
     """
     Leverage scores of the matrix A
     """
-    q, _ = tenpy.qr(A)
-    return np.asarray([q[i:] @ q[i:] for i in range(q.shape[0])])
+    q, _ = tenpy.qr(A.T)
+    return np.asarray([q[i, :] @ q[i, :] for i in range(q.shape[0])])
 
 
 @six.add_metaclass(abc.ABCMeta)
@@ -78,39 +78,81 @@ class ALS_leverage_base():
         self.T = T
         self.order = len(T.shape)
         self.A = A
-        self.R = A[0].shape[1]
+        self.R = A[0].shape[0]
         self.epsilon = args.epsilon
         self.outer_iter = args.outer_iter
         self.p_distributions = [
-            leverage_scores(A[i]) / self.R for i in self.order
+            leverage_scores(self.tenpy, self.A[i]) / self.R
+            for i in range(self.order)
         ]
-        self.sample_size = self.R**(self.order - 1) / (self.epsilon**2)
-        tenpy.printf(f"Leverage sample size is {self.sample_size}")
+        self.sample_size = int(self.R**(self.order - 1) / (self.epsilon**2))
+        tenpy.printf(
+            f"Leverage sample size is {self.sample_size}, rank is {self.R}")
 
     @abc.abstractmethod
-    def _solve(self, i, Regu, s):
+    def _solve(self, lhs, rhs, k):
+        return
+
+    @abc.abstractmethod
+    def _form_lhs(self, list_a):
         return
 
     def sample_krp_leverage(self, k):
-        return
+        idx = [None for _ in range(self.order)]
+        weights = [1. for _ in range(self.sample_size)]
+        for i in range(self.order):
+            if i == k:
+                continue
+            idx_one_mode = [
+                np.random.choice(np.arange(self.T.shape[i]),
+                                 p=self.p_distributions[i])
+                for _ in range(self.sample_size)
+            ]
+            weights = [
+                weights[j] * self.p_distributions[i][idx_one_mode[j]]
+                for j in range(self.sample_size)
+            ]
+            idx[i] = idx_one_mode
+        assert len(idx) == self.order
+        weights = 1. / (np.sqrt(self.sample_size * np.asarray(weights)))
+        return idx, weights
 
-    def krp_sample(self, k, idx, weights):
-        return
+    def lhs_sample(self, k, idx, weights):
+        # form the krp or kronecker product
+        lhs = []
+        for s_i in range(self.sample_size):
+            list_a = []
+            for j in range(self.order):
+                if j == k:
+                    continue
+                list_a.append(self.A[j][:, idx[j][s_i]])
+            lhs.append(self._form_lhs(list_a))
+        # TODO: change this to general tenpy?
+        return np.asarray(lhs)
 
-    def tensor_sample(self, k, idx, weights):
-        return
+    def rhs_sample(self, k, idx, weights):
+        # sample the tensor
+        rhs = []
+        for s_i in range(self.sample_size):
+            sample_idx = [idx[j][s_i] for j in range(k)]
+            sample_idx += [slice(None)]
+            sample_idx += [idx[j][s_i] for j in range(k + 1, self.order)]
+            rhs.append(self.T[tuple(sample_idx)])
+        # TODO: change this to general tenpy?
+        return np.asarray(rhs)
 
     def step(self, Regu):
         for l in range(self.outer_iter):
             for k in range(self.order):
                 # get the sampling indices
-                idx, weights = self.sample_krp_leverage(
-                    self.p_distributions, k, self.sample_size)
+                idx, weights = self.sample_krp_leverage(k)
                 # get the sampled lhs and rhs
-                Z = self.krp_sample(self.A, k, idx, weights)
-                X = self.tensor_sample(self.T, k, idx, weights)
-                self._solve(Z, X, k)
-                self.p_distributions[k] = leverage_scores(A[k]) / self.R
+                lhs = self.lhs_sample(k, idx, weights)
+                rhs = self.rhs_sample(k, idx, weights)
+                self._solve(lhs, rhs, k)
+                print(lhs.shape, rhs.shape, self.A[k].shape)
+                self.p_distributions[k] = leverage_scores(
+                    self.tenpy, self.A[k]) / self.R
         return self.A
 
 

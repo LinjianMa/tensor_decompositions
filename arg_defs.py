@@ -117,6 +117,19 @@ def add_general_arguments(parser):
                         help="Whether to profile the code.")
 
 
+def add_leverage_sampling_arguments(parser):
+    parser.add_argument('--epsilon',
+                        default=0.3,
+                        type=float,
+                        metavar='float',
+                        help='epsilon used in the leverage score sampling')
+    parser.add_argument('--outer-iter',
+                        type=int,
+                        default=1,
+                        metavar='int',
+                        help='The number of iterations grouped as one epoch')
+
+
 def add_pp_arguments(parser):
     parser.add_argument(
         '--tol-restart-dt',

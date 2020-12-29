@@ -1,10 +1,16 @@
-import hptt
 import numpy as np
 import numpy.linalg as la
 import scipy.linalg as sla
-
-from mkl_interface import einsum_batched_matmul
 from .profiler import backend_profiler
+
+FAST_KERNEL = False
+
+try:
+    import hptt
+    from mkl_interface import einsum_batched_matmul
+    FAST_KERNEL = True
+except ImportError:
+    pass
 
 
 def name():
@@ -174,7 +180,10 @@ def solve(G, RHS):
 
 @backend_profiler(tag_names=['einstr'], tag_inputs=[0])
 def einsum(string, *args):
-    out = einsum_batched_matmul(string, *args)
+    if FAST_KERNEL:
+        out = einsum_batched_matmul(string, *args)
+    else:
+        out = np.einsum(string, *args)
     return out
 
 
@@ -212,7 +221,10 @@ def eye(*args):
 
 @backend_profiler(tag_names=['shape'], tag_inputs=[0])
 def transpose(A, axes=(1, 0)):
-    return hptt.transpose(A, axes)
+    if FAST_KERNEL:
+        return hptt.transpose(A, axes)
+    else:
+        return np.transpose(A, axes)
 
 
 def argmax(A, axis=0):
