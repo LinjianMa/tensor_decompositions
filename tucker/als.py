@@ -1,7 +1,25 @@
 import numpy as np
 import queue
 from .common_kernels import n_mode_eigendec
-from als.als_optimizer import DTALS_base, PPALS_base
+from als.als_optimizer import DTALS_base, PPALS_base, ALS_leverage_base
+
+
+class Tucker_leverage_Optimizer(ALS_leverage_base):
+    def __init__(self, tenpy, T, A, args):
+        ALS_leverage_base.__init__(self, tenpy, T, A, args)
+
+    def _solve(self, lhs, rhs, k):
+        A_core = self.tenpy.solve(
+            self.tenpy.transpose(lhs) @ lhs,
+            self.tenpy.transpose(lhs) @ rhs)
+        _, _, self.A[k] = self.tenpy.rsvd(A_core, self.R)
+
+    def _form_lhs(self, list_a):
+        out = list_a[0]
+        for i in range(1, len(list_a)):
+            # TODO: change this to support general tenpy
+            out = np.kron(out, list_a[i])
+        return out
 
 
 class Tucker_DTALS_Optimizer(DTALS_base):

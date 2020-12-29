@@ -118,7 +118,7 @@ def Tucker_ALS(tenpy,
                res_calc_freq=1):
 
     from tucker.common_kernels import get_residual
-    from tucker.als import Tucker_DTALS_Optimizer, Tucker_PPALS_Optimizer
+    from tucker.als import Tucker_DTALS_Optimizer, Tucker_PPALS_Optimizer, Tucker_leverage_Optimizer
 
     flag_dt = True
 
@@ -132,6 +132,7 @@ def Tucker_ALS(tenpy,
     optimizer_list = {
         'DT': Tucker_DTALS_Optimizer(tenpy, T, A),
         'PP': Tucker_PPALS_Optimizer(tenpy, T, A, args),
+        'Leverage': Tucker_leverage_Optimizer(tenpy, T, A, args),
     }
     optimizer = optimizer_list[method]
 
