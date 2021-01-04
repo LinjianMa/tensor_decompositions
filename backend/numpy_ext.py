@@ -232,8 +232,8 @@ def argmax(A, axis=0):
 
 
 @backend_profiler(tag_names=['shape'], tag_inputs=[0])
-def qr(A):
-    return la.qr(A)
+def qr(A, mode='reduced'):
+    return la.qr(A, mode=mode)
 
 
 def reshape(A, shape, order='F'):

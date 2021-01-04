@@ -221,6 +221,10 @@ def run_als(args):
             tenpy.printf("Testing random tensor")
             shape = s * np.ones(order).astype(int)
             T = tenpy.random(shape)
+    elif tensor == "random_bias":
+        tenpy.printf("Testing biased random tensor")
+        sizes = [s] * args.order
+        T = synthetic_tensors.init_rand_bias(tenpy, order, sizes, R, args.seed)
     elif tensor == "random_col":
         T = synthetic_tensors.init_const_collinearity_tensor(
             tenpy, s, order, R, args.col, args.seed)
@@ -243,13 +247,21 @@ def run_als(args):
             A.append(
                 tenpy.load_tensor_from_file(args.load_tensor + 'mat' + str(i) +
                                             '.npy'))
-    elif args.hosvd != 0:
+    elif args.hosvd == 1:
         if args.decomposition == "CP":
             for i in range(T.ndim):
                 A.append(tenpy.random((R, args.hosvd_core_dim[i])))
         elif args.decomposition == "Tucker":
             from tucker.common_kernels import hosvd
             A = hosvd(tenpy, T, args.hosvd_core_dim, compute_core=False)
+    elif args.hosvd == 2:
+        if args.decomposition == "CP":
+            # TODO: rewrite this case
+            for i in range(T.ndim):
+                A.append(tenpy.random((R, args.hosvd_core_dim[i])))
+        elif args.decomposition == "Tucker":
+            from tucker.common_kernels import rrf
+            A = rrf(tenpy, T, args.hosvd_core_dim, epsilon=args.epsilon)
     else:
         if args.decomposition == "CP":
             for i in range(T.ndim):

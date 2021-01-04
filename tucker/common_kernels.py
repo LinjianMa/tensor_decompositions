@@ -80,6 +80,37 @@ def hosvd(tenpy, T, ranks, compute_core=False):
         return A
 
 
+def rrf(tenpy, T, ranks, epsilon):
+    """
+    randomized range finder
+    """
+    A = [None for _ in range(T.ndim)]
+    dims = range(T.ndim)
+    for d in dims:
+        num_columns = 1
+        for i in dims:
+            if i != d:
+                num_columns *= T.shape[i]
+        # reshape tensor
+        index = list(dims)
+        index[0] = d
+        index[d] = 0
+        reshaped_T = tenpy.transpose(T, tuple(index)).reshape((T.shape[d], -1))
+        # get the embedding matrix
+        sample_size = int(ranks[d] / epsilon)
+        std_gaussian = np.sqrt(1. / sample_size)
+        # TODO: change this to generalized tenpy
+        omega = np.random.normal(loc=0.0,
+                                 scale=std_gaussian,
+                                 size=(num_columns, sample_size))
+
+        embed_T = reshaped_T @ omega
+        q, _ = tenpy.qr(embed_T)
+        A[d] = q[:, :ranks[d]].T
+
+    return A
+
+
 def get_residual(tenpy, T, A):
     t0 = time.time()
     AAT = [None for _ in range(T.ndim)]

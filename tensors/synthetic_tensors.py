@@ -14,6 +14,22 @@ def init_rand(tenpy, order, sizes, R, seed=1):
     return T
 
 
+def init_rand_bias(tenpy, order, sizes, R, seed=1):
+    tenpy.seed(seed * 1001)
+    A = []
+    for i in range(order):
+        A.append(tenpy.random((R, sizes[i])))
+    T = khatri_rao_product_chain(tenpy, A)
+    bias_magnitude = np.sqrt(tenpy.vecnorm(T)**2 / R)**(1. / order)
+    for i in range(order):
+        for j in range(R // 2):
+            A[i][j, :] = tenpy.zeros((sizes[i]))
+            element = np.random.randint(sizes[i], size=1)[0]
+            A[i][j, element] = bias_magnitude
+    T = khatri_rao_product_chain(tenpy, A)
+    return T
+
+
 def collinearity(v1, v2, tenpy):
     return tenpy.dot(v1, v2) / (tenpy.vecnorm(v1) * tenpy.vecnorm(v2))
 

@@ -40,13 +40,14 @@ def add_general_arguments(parser):
         choices=[
             'random',
             'random_col',
+            'random_bias',
             'amino',
             'coil100',
             'timelapse',
             'scf',
         ],
         help=
-        'choose tensor to test, available: random, random_col, amino, coil100, timelapse, scf (default: random)'
+        'choose tensor to test, available: random, random_bias, random_col, amino, coil100, timelapse, scf (default: random)'
     )
     parser.add_argument(
         '--backend',
@@ -81,7 +82,9 @@ def add_general_arguments(parser):
         type=int,
         default=0,
         metavar='int',
-        help='initialize factor matrices with hosvd or not (default: 0)')
+        help=
+        'initialize factor matrices with hosvd or not (default: 0). If 1, use hosvd. If 2, use randomized range finder (rrf)'
+    )
     parser.add_argument('--hosvd-core-dim',
                         type=int,
                         nargs='+',

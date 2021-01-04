@@ -9,10 +9,17 @@ class Tucker_leverage_Optimizer(ALS_leverage_base):
         ALS_leverage_base.__init__(self, tenpy, T, A, args)
 
     def _solve(self, lhs, rhs, k):
-        A_core = self.tenpy.solve(
-            self.tenpy.transpose(lhs) @ lhs,
-            self.tenpy.transpose(lhs) @ rhs)
+        q, r = self.tenpy.qr(lhs)
+        mod_rhs = self.tenpy.transpose(q) @ rhs
+        u, s, vt = self.tenpy.rsvd(mod_rhs, self.R)
+        A_core = self.tenpy.transpose(r) @ u @ self.tenpy.diag(s) @ vt
         _, _, self.A[k] = self.tenpy.rsvd(A_core, self.R)
+
+        # Not optimal implementation
+        # A_core = self.tenpy.solve(
+        #     self.tenpy.transpose(lhs) @ lhs,
+        #     self.tenpy.transpose(lhs) @ rhs)
+        # _, _, self.A[k] = self.tenpy.rsvd(A_core, self.R)
 
     def _form_lhs(self, list_a):
         out = list_a[0]
