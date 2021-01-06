@@ -118,7 +118,8 @@ def Tucker_ALS(tenpy,
                res_calc_freq=1):
 
     from tucker.common_kernels import get_residual
-    from tucker.als import Tucker_DTALS_Optimizer, Tucker_PPALS_Optimizer, Tucker_leverage_Optimizer
+    from tucker.als import Tucker_DTALS_Optimizer, Tucker_PPALS_Optimizer
+    from tucker.als import Tucker_leverage_Optimizer, Tucker_countsketch_Optimizer, Tucker_countsketch_su_Optimizer
 
     flag_dt = True
 
@@ -133,6 +134,8 @@ def Tucker_ALS(tenpy,
         'DT': Tucker_DTALS_Optimizer(tenpy, T, A),
         'PP': Tucker_PPALS_Optimizer(tenpy, T, A, args),
         'Leverage': Tucker_leverage_Optimizer(tenpy, T, A, args),
+        'Countsketch': Tucker_countsketch_Optimizer(tenpy, T, A, args),
+        'Countsketch-su': Tucker_countsketch_su_Optimizer(tenpy, T, A, args)
     }
     optimizer = optimizer_list[method]
 
@@ -144,7 +147,10 @@ def Tucker_ALS(tenpy,
             if args.save_tensor:
                 folderpath = join(results_dir, arg_defs.get_file_prefix(args))
                 save_decomposition_results(T, A, tenpy, folderpath)
-            res = get_residual(tenpy, T, A)
+            if method in ['DT', 'PP']:
+                res = get_residual(tenpy, T, A)
+            elif method in ['Leverage', 'Countsketch', 'Countsketch-su']:
+                res = get_residual(tenpy, T, A, optimizer.core)
             fitness = 1 - res / normT
             d_fit = abs(fitness - fitness_old)
             fitness_old = fitness
@@ -219,8 +225,14 @@ def run_als(args):
             T = synthetic_tensors.init_rand(tenpy, order, sizes, R, args.seed)
         if args.decomposition == "Tucker":
             tenpy.printf("Testing random tensor")
-            shape = s * np.ones(order).astype(int)
+            from tucker.common_kernels import ttmc
+            shape = int(
+                1.5 * args.hosvd_core_dim[0]) * np.ones(order).astype(int)
             T = tenpy.random(shape)
+            A = []
+            for i in range(T.ndim):
+                A.append(tenpy.random((s, int(1.5 * args.hosvd_core_dim[0]))))
+            T = ttmc(tenpy, T, A, transpose=True)
     elif tensor == "random_bias":
         tenpy.printf("Testing biased random tensor")
         sizes = [s] * args.order
@@ -247,21 +259,22 @@ def run_als(args):
             A.append(
                 tenpy.load_tensor_from_file(args.load_tensor + 'mat' + str(i) +
                                             '.npy'))
-    elif args.hosvd == 1:
+    elif args.hosvd != 0:
         if args.decomposition == "CP":
             for i in range(T.ndim):
                 A.append(tenpy.random((R, args.hosvd_core_dim[i])))
         elif args.decomposition == "Tucker":
-            from tucker.common_kernels import hosvd
-            A = hosvd(tenpy, T, args.hosvd_core_dim, compute_core=False)
-    elif args.hosvd == 2:
-        if args.decomposition == "CP":
-            # TODO: rewrite this case
-            for i in range(T.ndim):
-                A.append(tenpy.random((R, args.hosvd_core_dim[i])))
-        elif args.decomposition == "Tucker":
-            from tucker.common_kernels import rrf
-            A = rrf(tenpy, T, args.hosvd_core_dim, epsilon=args.epsilon)
+            from tucker.common_kernels import hosvd, rrf
+            if args.hosvd == 1:
+                A = hosvd(tenpy, T, args.hosvd_core_dim, compute_core=False)
+            elif args.hosvd == 2:
+                A = rrf(tenpy, T, args.hosvd_core_dim, epsilon=args.epsilon)
+            elif args.hosvd == 3:
+                A = rrf(tenpy,
+                        T,
+                        args.hosvd_core_dim,
+                        epsilon=args.epsilon,
+                        countsketch=True)
     else:
         if args.decomposition == "CP":
             for i in range(T.ndim):

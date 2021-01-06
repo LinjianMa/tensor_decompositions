@@ -1,19 +1,30 @@
 import numpy as np
 import queue
-from .common_kernels import n_mode_eigendec
-from als.als_optimizer import DTALS_base, PPALS_base, ALS_leverage_base
+import scipy
+from .common_kernels import n_mode_eigendec, kron_products, count_sketch, matricize_tensor
+from cpd.common_kernels import krp
+from als.als_optimizer import DTALS_base, PPALS_base, ALS_leverage_base, ALS_countsketch_base, ALS_countsketch_su_base
 
 
 class Tucker_leverage_Optimizer(ALS_leverage_base):
     def __init__(self, tenpy, T, A, args):
         ALS_leverage_base.__init__(self, tenpy, T, A, args)
+        self.core_dims = args.hosvd_core_dim
+        self.core = tenpy.random(self.core_dims)
 
     def _solve(self, lhs, rhs, k):
         q, r = self.tenpy.qr(lhs)
         mod_rhs = self.tenpy.transpose(q) @ rhs
-        u, s, vt = self.tenpy.rsvd(mod_rhs, self.R)
-        A_core = self.tenpy.transpose(r) @ u @ self.tenpy.diag(s) @ vt
-        _, _, self.A[k] = self.tenpy.rsvd(A_core, self.R)
+        u, s, vt = self.tenpy.svd(mod_rhs, self.R)
+        A_core = np.linalg.inv(r) @ u @ self.tenpy.diag(s) @ vt
+        U, s, self.A[k] = self.tenpy.svd(A_core, self.R)
+        self.core = (U @ np.diag(s)).reshape(self.core_dims)
+
+        index = list(range(self.order))
+        index[k] = self.order - 1
+        for i in range(k + 1, self.order):
+            index[i] = i - 1
+        self.core = self.tenpy.transpose(self.core, tuple(index))
 
         # Not optimal implementation
         # A_core = self.tenpy.solve(
@@ -22,11 +33,86 @@ class Tucker_leverage_Optimizer(ALS_leverage_base):
         # _, _, self.A[k] = self.tenpy.rsvd(A_core, self.R)
 
     def _form_lhs(self, list_a):
-        out = list_a[0]
-        for i in range(1, len(list_a)):
-            # TODO: change this to support general tenpy
-            out = np.kron(out, list_a[i])
-        return out
+        return kron_products(list_a)
+
+
+def kronecker_tensorsketch(tenpy, A, indices, sample_size, hashed_indices,
+                           rand_signs):
+    assert len(indices) == len(hashed_indices)
+    # each A has size R x s
+    sketched_A = [
+        count_sketch(A[indices[i]],
+                     sample_size,
+                     hashed_indices=hashed_indices[i],
+                     rand_signs=rand_signs[i]) for i in range(len(indices))
+    ]
+    # each A has size s x R
+    sketched_A = [np.fft.fft(A.transpose(), axis=0) for A in sketched_A]
+    # krp_A has size s x R^N
+    krp_A = krp(tenpy, sketched_A).reshape((sample_size, -1))
+    return np.real(np.fft.ifft(krp_A, axis=0))
+
+
+class Tucker_countsketch_Optimizer(ALS_countsketch_base):
+    def __init__(self, tenpy, T, A, args):
+        ALS_countsketch_base.__init__(self, tenpy, T, A, args)
+        self.core = tenpy.random(self.core_dims)
+
+    def _solve(self, lhs, rhs, k):
+        q, r = self.tenpy.qr(lhs)
+        mod_rhs = self.tenpy.transpose(q) @ rhs
+        u, s, vt = self.tenpy.svd(mod_rhs, self.core_dims[k])
+        A_core = np.linalg.inv(r) @ u @ self.tenpy.diag(s) @ vt
+        U, s, self.A[k] = self.tenpy.svd(A_core, self.core_dims[k])
+
+        self.core = (U @ np.diag(s)).reshape(self.core_dims)
+        index = list(range(self.order))
+        index[k] = self.order - 1
+        for i in range(k + 1, self.order):
+            index[i] = i - 1
+        self.core = self.tenpy.transpose(self.core, tuple(index))
+
+    def _form_lhs(self, k):
+        indices = [i for i in range(k)] + [i for i in range(k + 1, self.order)]
+        return kronecker_tensorsketch(self.tenpy, self.A, indices,
+                                      self.sample_size,
+                                      self.hashed_indices_factors[k],
+                                      self.rand_signs_factors[k])
+
+
+class Tucker_countsketch_su_Optimizer(ALS_countsketch_su_base):
+    def __init__(self, tenpy, T, A, args):
+        ALS_countsketch_su_base.__init__(self, tenpy, T, A, args)
+        self.core = tenpy.random(self.core_dims)
+
+    def _solve(self, lhs, rhs, k):
+        core_reshape = matricize_tensor(self.tenpy, self.core, k).transpose()
+        lhs = lhs @ core_reshape
+        mat = self.tenpy.solve(
+            self.tenpy.transpose(lhs) @ lhs,
+            self.tenpy.transpose(lhs) @ rhs)
+        q, _ = self.tenpy.qr(mat.transpose())
+        self.A[k] = q.transpose()
+
+    def _solve_core(self, lhs, rhs):
+        core_vec = self.tenpy.solve(
+            self.tenpy.transpose(lhs) @ lhs,
+            self.tenpy.transpose(lhs) @ rhs)
+        self.core = core_vec.reshape(self.core_dims)
+
+    def _form_lhs(self, k):
+        indices = [i for i in range(k)] + [i for i in range(k + 1, self.order)]
+        return kronecker_tensorsketch(self.tenpy, self.A, indices,
+                                      self.sample_size,
+                                      self.hashed_indices_factors[k],
+                                      self.rand_signs_factors[k])
+
+    def _form_lhs_core(self):
+        indices = [i for i in range(self.order)]
+        return kronecker_tensorsketch(self.tenpy, self.A, indices,
+                                      self.sample_size_core,
+                                      self.hashed_indices_core,
+                                      self.rand_signs_core)
 
 
 class Tucker_DTALS_Optimizer(DTALS_base):

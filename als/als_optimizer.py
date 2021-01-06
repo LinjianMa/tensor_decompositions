@@ -2,6 +2,7 @@ import numpy as np
 import time
 import abc, six
 import collections
+from tucker.common_kernels import kron_products, matricize_tensor, count_sketch
 try:
     import Queue as queue
 except ImportError:
@@ -150,9 +151,146 @@ class ALS_leverage_base():
                 lhs = self.lhs_sample(k, idx, weights)
                 rhs = self.rhs_sample(k, idx, weights)
                 self._solve(lhs, rhs, k)
-                print(lhs.shape, rhs.shape, self.A[k].shape)
                 self.p_distributions[k] = leverage_scores(
                     self.tenpy, self.A[k]) / self.R
+        return self.A
+
+
+@six.add_metaclass(abc.ABCMeta)
+class ALS_countsketch_base():
+    def __init__(self, tenpy, T, A, args):
+        self.tenpy = tenpy
+        self.T = T
+        self.order = len(T.shape)
+        self.A = A
+        self.R = A[0].shape[0]
+        self.epsilon = args.epsilon
+        self.outer_iter = args.outer_iter
+        self.sample_size = int(self.R**(self.order - 1) / (self.epsilon**2))
+        self.core_dims = args.hosvd_core_dim
+        tenpy.printf(
+            f"Countsketch sample size is {self.sample_size}, rank is {self.R}")
+        self._build_embeddings()
+
+    def _build_embeddings(self):
+        self.hashed_indices_factors = []
+        self.rand_signs_factors = []
+        self.sketched_Ts = []
+        for dim in range(self.order):
+            indices = [i for i in range(dim)
+                       ] + [i for i in range(dim + 1, self.order)]
+            hashed_indices = [
+                np.random.choice(self.sample_size,
+                                 self.A[i].shape[1],
+                                 replace=True) for i in indices
+            ]
+            rand_signs = [
+                np.random.choice(2, self.A[i].shape[1], replace=True) * 2 - 1
+                for i in indices
+            ]
+            self.hashed_indices_factors.append(hashed_indices)
+            self.rand_signs_factors.append(rand_signs)
+
+            signs_tensor = kron_products(rand_signs)
+            indices_tensor = hashed_indices[-1]
+            for index in reversed(hashed_indices[:-1]):
+                new_indices = np.zeros((len(index) * len(indices_tensor), ))
+                for j in range(len(index)):
+                    new_indices[j * len(indices_tensor):(j + 1) *
+                                len(indices_tensor)] = np.mod(
+                                    indices_tensor + index[j],
+                                    self.sample_size)
+                indices_tensor = new_indices
+            assert indices_tensor.shape == signs_tensor.shape
+
+            reshape_T = matricize_tensor(self.tenpy, self.T, dim)
+            sketched_mat_T = count_sketch(reshape_T,
+                                          self.sample_size,
+                                          hashed_indices=indices_tensor,
+                                          rand_signs=signs_tensor)
+            assert sketched_mat_T.shape == (self.T.shape[dim],
+                                            self.sample_size)
+            self.sketched_Ts.append(sketched_mat_T.transpose())
+
+    @abc.abstractmethod
+    def _solve(self, lhs, rhs, k):
+        return
+
+    @abc.abstractmethod
+    def _form_lhs(self, k):
+        return
+
+    def step(self, Regu):
+        for l in range(self.outer_iter):
+            for k in range(self.order):
+                lhs = self._form_lhs(k)
+                self._solve(lhs, self.sketched_Ts[k], k)
+        return self.A
+
+
+@six.add_metaclass(abc.ABCMeta)
+class ALS_countsketch_su_base(ALS_countsketch_base):
+    def __init__(self, tenpy, T, A, args):
+        ALS_countsketch_base.__init__(self, tenpy, T, A, args)
+        self.sample_size_core = self.sample_size * self.R
+        self._build_embedding_core()
+
+    def _build_embedding_core(self):
+        indices = [i for i in range(self.order)]
+        self.hashed_indices_core = [
+            np.random.choice(self.sample_size_core,
+                             self.A[i].shape[1],
+                             replace=True) for i in indices
+        ]
+        self.rand_signs_core = [
+            np.random.choice(2, self.A[i].shape[1], replace=True) * 2 - 1
+            for i in indices
+        ]
+
+        signs_tensor = kron_products(self.rand_signs_core)
+        indices_tensor = self.hashed_indices_core[-1]
+        for index in reversed(self.hashed_indices_core[:-1]):
+            new_indices = np.zeros((len(index) * len(indices_tensor), ))
+            for j in range(len(index)):
+                new_indices[j * len(indices_tensor):(j + 1) *
+                            len(indices_tensor)] = np.mod(
+                                indices_tensor + index[j],
+                                self.sample_size_core)
+            indices_tensor = new_indices
+        assert indices_tensor.shape == signs_tensor.shape
+
+        reshape_T = self.T.reshape((1, -1))
+        # has shape 1 x s
+        sketched_mat_T = count_sketch(reshape_T,
+                                      self.sample_size_core,
+                                      hashed_indices=indices_tensor,
+                                      rand_signs=signs_tensor)
+        assert sketched_mat_T.shape == (1, self.sample_size_core)
+        self.sketched_T_core = sketched_mat_T.transpose()
+
+    @abc.abstractmethod
+    def _solve(self, lhs, rhs, k):
+        return
+
+    @abc.abstractmethod
+    def _solve_core(self, lhs, rhs):
+        return
+
+    @abc.abstractmethod
+    def _form_lhs(self, k):
+        return
+
+    @abc.abstractmethod
+    def _form_lhs_core(self):
+        return
+
+    def step(self, Regu):
+        for l in range(self.outer_iter):
+            for k in range(self.order):
+                lhs = self._form_lhs(k)
+                self._solve(lhs, self.sketched_Ts[k], k)
+            lhs = self._form_lhs_core()
+            self._solve_core(lhs, self.sketched_T_core)
         return self.A
 
 

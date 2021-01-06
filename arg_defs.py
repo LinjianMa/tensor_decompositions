@@ -64,9 +64,12 @@ def add_general_arguments(parser):
         '--method',
         default="DT",
         metavar='string',
-        choices=['DT', 'PP', 'PPsimulate', 'partialPP', 'Leverage'],
+        choices=[
+            'DT', 'PP', 'PPsimulate', 'partialPP', 'Leverage', 'Countsketch',
+            'Countsketch-su'
+        ],
         help=
-        'choose the optimization method: DT, PP, PPsimulate, partialPP (default: DT)'
+        'choose the optimization method: DT, PP, PPsimulate, partialPP, Leverage, Countsketch, Countsketch-su (default: DT)'
     )
     parser.add_argument(
         '--decomposition',
@@ -83,7 +86,7 @@ def add_general_arguments(parser):
         default=0,
         metavar='int',
         help=
-        'initialize factor matrices with hosvd or not (default: 0). If 1, use hosvd. If 2, use randomized range finder (rrf)'
+        'initialize factor matrices with hosvd or not (default: 0). If 1, use hosvd. If 2, use randomized range finder (rrf). If 3, use rrf + countsketch.'
     )
     parser.add_argument('--hosvd-core-dim',
                         type=int,

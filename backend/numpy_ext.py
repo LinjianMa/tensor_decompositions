@@ -135,6 +135,7 @@ def svd(A, r=None):
 
 @backend_profiler(tag_names=['shape', 'rank'], tag_inputs=[0, 1])
 def rsvd(a, rank, niter=2, oversamp=5):
+    # TODO: rsvd for shape 10 x 200 is buggy
     m, n = a.shape
     r = min(rank + oversamp, m, n)
     # find subspace

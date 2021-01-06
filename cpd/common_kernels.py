@@ -15,6 +15,17 @@ def sub_lists(in_list, min_length):
     return subs
 
 
+def krp(tenpy, mat_list):
+    assert len(mat_list) >= 2
+    out = tenpy.einsum("Ka,Kb->Kab", mat_list[0], mat_list[1])
+    for i in range(2, len(mat_list)):
+        str1 = "K" + "".join(chr(ord('a') + j) for j in range(i))
+        str2 = "K" + chr(ord('a') + i)
+        str3 = "K" + "".join(chr(ord('a') + j) for j in range(i + 1))
+        out = tenpy.einsum(f"{str1},{str2}->{str3}", out, mat_list[i])
+    return out
+
+
 def khatri_rao_product_chain(tenpy, mat_list):
     assert len(mat_list) >= 3
     out = tenpy.einsum("Ka,Kb->Kab", mat_list[0], mat_list[1])
