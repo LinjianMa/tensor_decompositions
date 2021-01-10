@@ -122,6 +122,7 @@ def Tucker_ALS(tenpy,
     from tucker.als import Tucker_leverage_Optimizer, Tucker_countsketch_Optimizer, Tucker_countsketch_su_Optimizer
 
     flag_dt = True
+    ret_list = []
 
     if csv_file is not None:
         csv_writer = csv.writer(csv_file,
@@ -141,7 +142,7 @@ def Tucker_ALS(tenpy,
 
     normT = tenpy.vecnorm(T)
     fitness_old = 0.
-
+    fitness_list = []
     for i in range(num_iter):
         if i % res_calc_freq == 0 or i == num_iter - 1 or not flag_dt:
             if args.save_tensor:
@@ -159,7 +160,7 @@ def Tucker_ALS(tenpy,
                 print(
                     f"[ {i} ] Residual is {res}, fitness is: {fitness}, d_fit is: {d_fit}"
                 )
-                # write to csv file
+                ret_list.append([i, res, fitness, d_fit])
                 if csv_file is not None:
                     csv_writer.writerow(
                         [i, time_all, res, fitness, flag_dt, d_fit])
@@ -175,7 +176,139 @@ def Tucker_ALS(tenpy,
         time_all += t1 - t0
     tenpy.printf(f"{method} method took {time_all} seconds overall")
 
-    return A, res
+    return ret_list
+
+
+def run_als_cpd(args, tenpy, csv_file):
+    if args.load_tensor is not '':
+        T = tenpy.load_tensor_from_file(args.load_tensor + 'tensor.npy')
+    elif args.tensor == "random":
+        tenpy.printf("Testing random tensor")
+        sizes = [args.s] * args.order
+        T = synthetic_tensors.init_rand(tenpy, args.order, sizes, args.R,
+                                        args.seed)
+    elif args.tensor == "random_bias":
+        tenpy.printf("Testing biased random tensor")
+        sizes = [args.s] * args.order
+        T = synthetic_tensors.init_rand_bias(tenpy, args.order, sizes, args.R,
+                                             args.seed)
+    elif args.tensor == "random_col":
+        T = synthetic_tensors.init_const_collinearity_tensor(
+            tenpy, args.s, args.order, args.R, args.col, args.seed)
+    elif args.tensor == "amino":
+        T = real_tensors.amino_acids(tenpy)
+    elif args.tensor == "coil100":
+        T = real_tensors.coil_100(tenpy)
+    elif args.tensor == "timelapse":
+        T = real_tensors.time_lapse_images(tenpy)
+    elif args.tensor == "scf":
+        T = real_tensors.get_scf_tensor(tenpy)
+
+    tenpy.printf("The shape of the input tensor is: ", T.shape)
+    Regu = args.regularization
+
+    if args.load_tensor is not '':
+        A = [
+            tenpy.load_tensor_from_file("{args.load_tensor}mat{i}.npy")
+            for i in range(T.ndim)
+        ]
+    elif args.hosvd != 0:
+        A = [
+            tenpy.random((args.R, args.hosvd_core_dim[i]))
+            for i in range(T.ndim)
+        ]
+    else:
+        A = [tenpy.random((args.R, T.shape[i])) for i in range(T.ndim)]
+
+    if args.hosvd:
+        from tucker.common_kernels import hosvd
+        transformer, compressed_T = hosvd(tenpy,
+                                          T,
+                                          args.hosvd_core_dim,
+                                          compute_core=True)
+        ret_list, num_iters_map, time_map, pp_init_iter = CP_ALS(
+            tenpy, A, compressed_T, 100, csv_file, Regu, 'DT', args,
+            args.res_calc_freq)
+        A_fullsize = [tenpy.dot(transformer[i], A[i]) for i in range(T.ndim)]
+        ret_list, num_iters_map, time_map, pp_init_iter = CP_ALS(
+            tenpy, A_fullsize, T, args.num_iter, csv_file, Regu, args.method,
+            args, args.res_calc_freq)
+    else:
+        ret_list, num_iters_map, time_map, pp_init_iter = CP_ALS(
+            tenpy, A, T, args.num_iter, csv_file, Regu, args.method, args,
+            args.res_calc_freq)
+
+    if args.backend == "ctf":
+        tepoch.end()
+    return ret_list, num_iters_map, time_map, pp_init_iter
+
+
+def run_als_tucker(args, tenpy, csv_file):
+    if args.load_tensor is not '':
+        T = tenpy.load_tensor_from_file(args.load_tensor + 'tensor.npy')
+    elif args.tensor == "random":
+        tenpy.printf("Testing random tensor")
+        from tucker.common_kernels import ttmc
+        ratio = 10
+        shape = int(ratio * args.hosvd_core_dim[0]) * np.ones(
+            args.order).astype(int)
+        T = tenpy.random(shape)
+        A = []
+        for i in range(T.ndim):
+            mat = tenpy.random((args.s, int(ratio * args.hosvd_core_dim[0])))
+            Q, _ = tenpy.qr(mat)
+            A.append(Q)
+        T = ttmc(tenpy, T, A, transpose=True)
+    elif args.tensor == "random_bias":
+        tenpy.printf("Testing biased random tensor")
+        sizes = [args.s] * args.order
+        T = synthetic_tensors.init_rand_bias(tenpy, args.order, sizes, args.R,
+                                             args.seed)
+    elif args.tensor == "random_col":
+        T = synthetic_tensors.init_const_collinearity_tensor(
+            tenpy, args.s, args.order, args.R, args.col, args.seed)
+    elif args.tensor == "amino":
+        T = real_tensors.amino_acids(tenpy)
+    elif args.tensor == "coil100":
+        T = real_tensors.coil_100(tenpy)
+    elif args.tensor == "timelapse":
+        T = real_tensors.time_lapse_images(tenpy)
+    elif args.tensor == "scf":
+        T = real_tensors.get_scf_tensor(tenpy)
+
+    tenpy.printf("The shape of the input tensor is: ", T.shape)
+    Regu = args.regularization
+
+    if args.load_tensor is not '':
+        A = [
+            tenpy.load_tensor_from_file("{args.load_tensor}mat{i}.npy")
+            for i in range(T.ndim)
+        ]
+    elif args.hosvd != 0:
+        from tucker.common_kernels import hosvd, rrf
+        if args.hosvd == 1:
+            A = hosvd(tenpy, T, args.hosvd_core_dim, compute_core=False)
+        elif args.hosvd == 2:
+            A = rrf(tenpy, T, args.hosvd_core_dim, epsilon=args.epsilon)
+        elif args.hosvd == 3:
+            A = rrf(tenpy,
+                    T,
+                    args.hosvd_core_dim,
+                    epsilon=args.epsilon,
+                    countsketch=True)
+    else:
+        A = [
+            tenpy.random((args.hosvd_core_dim[i], T.shape[i]))
+            for i in range(T.ndim)
+        ]
+
+    ret_list = Tucker_ALS(tenpy, A, T, args.num_iter, csv_file, Regu,
+                          args.method, args, args.res_calc_freq)
+    num_iters_map, time_map, pp_init_iter = None, None, None
+
+    if args.backend == "ctf":
+        tepoch.end()
+    return ret_list, num_iters_map, time_map, pp_init_iter
 
 
 def run_als(args):
@@ -188,18 +321,11 @@ def run_als(args):
                             quotechar='|',
                             quoting=csv.QUOTE_MINIMAL)
 
-    s = args.s
-    order = args.order
-    R = args.R
-    num_iter = args.num_iter
-    tensor = args.tensor
-    backend = args.backend
-
     profiler.do_profile(args.profile)
 
-    if backend == "numpy":
+    if args.backend == "numpy":
         import backend.numpy_ext as tenpy
-    elif backend == "ctf":
+    elif args.backend == "ctf":
         import backend.ctf_ext as tenpy
         import ctf
         tepoch = ctf.timer_epoch("ALS")
@@ -215,102 +341,10 @@ def run_als(args):
             ])
 
     tenpy.seed(args.seed)
-
-    if args.load_tensor is not '':
-        T = tenpy.load_tensor_from_file(args.load_tensor + 'tensor.npy')
-    elif tensor == "random":
-        if args.decomposition == "CP":
-            tenpy.printf("Testing random tensor")
-            sizes = [s] * args.order
-            T = synthetic_tensors.init_rand(tenpy, order, sizes, R, args.seed)
-        if args.decomposition == "Tucker":
-            tenpy.printf("Testing random tensor")
-            from tucker.common_kernels import ttmc
-            shape = int(
-                1.5 * args.hosvd_core_dim[0]) * np.ones(order).astype(int)
-            T = tenpy.random(shape)
-            A = []
-            for i in range(T.ndim):
-                A.append(tenpy.random((s, int(1.5 * args.hosvd_core_dim[0]))))
-            T = ttmc(tenpy, T, A, transpose=True)
-    elif tensor == "random_bias":
-        tenpy.printf("Testing biased random tensor")
-        sizes = [s] * args.order
-        T = synthetic_tensors.init_rand_bias(tenpy, order, sizes, R, args.seed)
-    elif tensor == "random_col":
-        T = synthetic_tensors.init_const_collinearity_tensor(
-            tenpy, s, order, R, args.col, args.seed)
-    elif tensor == "amino":
-        T = real_tensors.amino_acids(tenpy)
-    elif tensor == "coil100":
-        T = real_tensors.coil_100(tenpy)
-    elif tensor == "timelapse":
-        T = real_tensors.time_lapse_images(tenpy)
-    elif tensor == "scf":
-        T = real_tensors.get_scf_tensor(tenpy)
-
-    tenpy.printf("The shape of the input tensor is: ", T.shape)
-
-    Regu = args.regularization
-
-    A = []
-    if args.load_tensor is not '':
-        for i in range(T.ndim):
-            A.append(
-                tenpy.load_tensor_from_file(args.load_tensor + 'mat' + str(i) +
-                                            '.npy'))
-    elif args.hosvd != 0:
-        if args.decomposition == "CP":
-            for i in range(T.ndim):
-                A.append(tenpy.random((R, args.hosvd_core_dim[i])))
-        elif args.decomposition == "Tucker":
-            from tucker.common_kernels import hosvd, rrf
-            if args.hosvd == 1:
-                A = hosvd(tenpy, T, args.hosvd_core_dim, compute_core=False)
-            elif args.hosvd == 2:
-                A = rrf(tenpy, T, args.hosvd_core_dim, epsilon=args.epsilon)
-            elif args.hosvd == 3:
-                A = rrf(tenpy,
-                        T,
-                        args.hosvd_core_dim,
-                        epsilon=args.epsilon,
-                        countsketch=True)
-    else:
-        if args.decomposition == "CP":
-            for i in range(T.ndim):
-                A.append(tenpy.random((R, T.shape[i])))
-        else:
-            for i in range(T.ndim):
-                A.append(tenpy.random((args.hosvd_core_dim[i], T.shape[i])))
-
     if args.decomposition == "CP":
-        if args.hosvd:
-            from tucker.common_kernels import hosvd
-            transformer, compressed_T = hosvd(tenpy,
-                                              T,
-                                              args.hosvd_core_dim,
-                                              compute_core=True)
-            ret_list, num_iters_map, time_map, pp_init_iter = CP_ALS(
-                tenpy, A, compressed_T, 100, csv_file, Regu, 'DT', args,
-                args.res_calc_freq)
-            A_fullsize = []
-            for i in range(T.ndim):
-                A_fullsize.append(tenpy.dot(transformer[i], A[i]))
-            ret_list, num_iters_map, time_map, pp_init_iter = CP_ALS(
-                tenpy, A_fullsize, T, num_iter, csv_file, Regu, args.method,
-                args, args.res_calc_freq)
-        else:
-            ret_list, num_iters_map, time_map, pp_init_iter = CP_ALS(
-                tenpy, A, T, num_iter, csv_file, Regu, args.method, args,
-                args.res_calc_freq)
+        return run_als_cpd(args, tenpy, csv_file)
     elif args.decomposition == "Tucker":
-        Tucker_ALS(tenpy, A, T, num_iter, csv_file, Regu, args.method, args,
-                   args.res_calc_freq)
-        ret_list, num_iters_map, time_map, pp_init_iter = None, None, None, None
-
-    if backend == "ctf":
-        tepoch.end()
-    return ret_list, num_iters_map, time_map, pp_init_iter
+        return run_als_tucker(args, tenpy, csv_file)
 
 
 if __name__ == "__main__":
