@@ -14,6 +14,8 @@ from pathlib import Path
 from os.path import dirname, join
 from backend import profiler
 from utils import save_decomposition_results
+from scipy.stats import norm
+from scipy.sparse import random
 
 parent_dir = dirname(__file__)
 results_dir = join(parent_dir, 'results')
@@ -249,7 +251,7 @@ def run_als_tucker(args, tenpy, csv_file):
     elif args.tensor == "random":
         tenpy.printf("Testing random tensor")
         from tucker.common_kernels import ttmc
-        ratio = 10
+        ratio = args.rank_ratio
         shape = int(ratio * args.hosvd_core_dim[0]) * np.ones(
             args.order).astype(int)
         T = tenpy.random(shape)
@@ -302,8 +304,67 @@ def run_als_tucker(args, tenpy, csv_file):
             for i in range(T.ndim)
         ]
 
-    ret_list = Tucker_ALS(tenpy, A, T, args.num_iter, csv_file, Regu,
-                          args.method, args, args.res_calc_freq)
+    ret_list = T.Tucker_ALS(A, args.num_iter, args.method, args,
+                            args.res_calc_freq)
+    num_iters_map, time_map, pp_init_iter = None, None, None
+
+    if args.backend == "ctf":
+        tepoch.end()
+    return ret_list, num_iters_map, time_map, pp_init_iter
+
+
+def run_als_tucker_simulate(args, tenpy, csv_file):
+
+    from tucker.tucker_format import Tuckerformat
+
+    assert args.tensor in ["random", "random_bias"]
+    if args.tensor == "random":
+        tenpy.printf("Testing random tensor")
+        from tucker.common_kernels import ttmc
+        ratio = args.rank_ratio
+        shape = int(ratio * args.hosvd_core_dim[0]) * np.ones(
+            args.order).astype(int)
+        T_core = tenpy.random(shape)
+        factors = []
+        rs = []
+        for i in range(T_core.ndim):
+            rvs = norm(loc=0.0, scale=1.0).rvs
+            mat = random(args.s,
+                         int(ratio * args.hosvd_core_dim[0]),
+                         density=0.05,
+                         random_state=args.seed * i,
+                         data_rvs=rvs).A
+            mat = mat / tenpy.vecnorm(mat)
+            # size s x R
+            Q, r = tenpy.qr(mat)
+            factors.append(Q.transpose())
+            rs.append(r)
+        T_core = ttmc(tenpy, T_core, rs, transpose=True)
+        T = Tuckerformat(T_core, factors, tenpy)
+    elif args.tensor == "random_bias":
+        raise NotImplementedError
+
+    tenpy.printf("The shape of the input tensor core is: ", T_core.shape)
+    tenpy.printf("The size of the input tensor mode is: ", factors[0].shape[1])
+    Regu = args.regularization
+
+    if args.hosvd != 0:
+        if args.hosvd == 1:
+            A = T.hosvd(args.hosvd_core_dim, compute_core=False)
+        elif args.hosvd == 2:
+            A = T.rrf(args.hosvd_core_dim, epsilon=args.epsilon)
+        elif args.hosvd == 3:
+            A = T.rrf(args.hosvd_core_dim,
+                      epsilon=args.epsilon,
+                      countsketch=True)
+    else:
+        A = [
+            tenpy.random((args.hosvd_core_dim[i], args.s))
+            for i in range(T.order)
+        ]
+
+    ret_list = T.Tucker_ALS(A, args.num_iter, args.method, args,
+                            args.res_calc_freq)
     num_iters_map, time_map, pp_init_iter = None, None, None
 
     if args.backend == "ctf":
@@ -345,6 +406,8 @@ def run_als(args):
         return run_als_cpd(args, tenpy, csv_file)
     elif args.decomposition == "Tucker":
         return run_als_tucker(args, tenpy, csv_file)
+    elif args.decomposition == "Tucker_simulate":
+        return run_als_tucker_simulate(args, tenpy, csv_file)
 
 
 if __name__ == "__main__":
@@ -353,6 +416,7 @@ if __name__ == "__main__":
     arg_defs.add_pp_arguments(parser)
     arg_defs.add_col_arguments(parser)
     arg_defs.add_leverage_sampling_arguments(parser)
+    arg_defs.add_tucker_rank_ratio_arguments(parser)
     args, _ = parser.parse_known_args()
 
     run_als(args)

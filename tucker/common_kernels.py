@@ -40,24 +40,41 @@ def ttmc(tenpy, T, A, transpose=False):
     dims = T.ndim
     X = T.copy()
     for n in range(dims):
+        str1 = "".join([chr(ord('a') + j) for j in range(n)]) + "y" + "".join(
+            [chr(ord('a') + j) for j in range(n + 1, dims)])
+        str3 = "".join([chr(ord('a') + j) for j in range(n)]) + "z" + "".join(
+            [chr(ord('a') + j) for j in range(n + 1, dims)])
         if transpose:
-            str1 = "".join([
-                chr(ord('a') + j) for j in range(n)
-            ]) + "y" + "".join([chr(ord('a') + j) for j in range(n + 1, dims)])
             str2 = "zy"
-            str3 = "".join([
-                chr(ord('a') + j) for j in range(n)
-            ]) + "z" + "".join([chr(ord('a') + j) for j in range(n + 1, dims)])
         else:
-            str1 = "".join([
-                chr(ord('a') + j) for j in range(n)
-            ]) + "y" + "".join([chr(ord('a') + j) for j in range(n + 1, dims)])
             str2 = "yz"
-            str3 = "".join([
-                chr(ord('a') + j) for j in range(n)
-            ]) + "z" + "".join([chr(ord('a') + j) for j in range(n + 1, dims)])
         einstr = str1 + "," + str2 + "->" + str3
         X = tenpy.einsum(einstr, X, A[n])
+    return X
+
+
+def ttmc_leave_one_mode(tenpy, T, A, d, transpose=False):
+    """
+    Tensor times matrix contractions
+    """
+    dims = T.ndim
+    trans_T = transpose_tensor(tenpy, T, d)
+    X = trans_T.copy()
+
+    inds_tensor = [i for i in range(1, dims)]
+    inds_matrices = [i for i in range(dims) if i != d]
+
+    for i1, i2 in zip(inds_tensor, inds_matrices):
+        str1 = "".join([chr(ord('a') + j) for j in range(i1)]) + "y" + "".join(
+            [chr(ord('a') + j) for j in range(i1 + 1, dims)])
+        str3 = "".join([chr(ord('a') + j) for j in range(i1)]) + "z" + "".join(
+            [chr(ord('a') + j) for j in range(i1 + 1, dims)])
+        if transpose:
+            str2 = "zy"
+        else:
+            str2 = "yz"
+        einstr = str1 + "," + str2 + "->" + str3
+        X = tenpy.einsum(einstr, X, A[i2])
     return X
 
 
@@ -104,14 +121,17 @@ def count_sketch(A, sample_size, hashed_indices=None, rand_signs=None):
     return C
 
 
-def matricize_tensor(tenpy, T, d):
-    # reshape tensor
+def transpose_tensor(tenpy, T, d):
     index = list(range(T.ndim))
     index[0] = d
     for i in range(1, d + 1):
         index[i] = i - 1
-    reshaped_T = tenpy.transpose(T, tuple(index)).reshape((T.shape[d], -1))
-    return reshaped_T
+    return tenpy.transpose(T, tuple(index))
+
+
+def matricize_tensor(tenpy, T, d):
+    transpose_T = transpose_tensor(tenpy, T, d)
+    return transpose_T.reshape((T.shape[d], -1))
 
 
 def rrf(tenpy, T, ranks, epsilon, countsketch=False):

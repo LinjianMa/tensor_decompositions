@@ -78,8 +78,11 @@ def add_general_arguments(parser):
         choices=[
             'CP',
             'Tucker',
+            'Tucker_simulate',
         ],
-        help='choose the decomposition method: CP, Tucker (default: CP)')
+        help=
+        'choose the decomposition method: CP, Tucker, Tucker_simulate (default: CP)'
+    )
     parser.add_argument(
         '--hosvd',
         type=int,
@@ -164,6 +167,15 @@ def add_col_arguments(parser):
                         nargs='+',
                         default=[0.2, 0.8],
                         help='collinearity range')
+
+
+def add_tucker_rank_ratio_arguments(parser):
+    parser.add_argument(
+        '--rank-ratio',
+        default=10,
+        type=float,
+        metavar='float',
+        help='ratio of the true rank over the decomp rank for random tensors.')
 
 
 def get_file_prefix(args):
