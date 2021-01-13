@@ -1,6 +1,8 @@
 import time
 import numpy as np
-from tucker.common_kernels import n_mode_eigendec, kron_products, matricize_tensor, ttmc, ttmc_leave_one_mode
+from tucker.common_kernels import n_mode_eigendec, kron_products, matricize_tensor, ttmc, ttmc_leave_one_mode, one_mode_solve
+from tucker.als import kronecker_tensorsketch
+from als.als_optimizer import ALS_leverage_base, ALS_countsketch_base, ALS_countsketch_su_base
 
 
 class Tuckerformat(object):
@@ -14,6 +16,7 @@ class Tuckerformat(object):
 
         self.inner_factors = [None for _ in range(self.order)]
         self.tenpy = tenpy
+        self.shape = tuple([factor.shape[1] for factor in factors])
 
     def hosvd(self, ranks, compute_core=False):
         A = [None for _ in range(self.order)]
@@ -98,10 +101,13 @@ class Tuckerformat(object):
 
         time_all = 0.
         optimizer_list = {
-            'DT': Tuckerformat_DTALS_Optimizer(self.tenpy, self, A),
-            # 'Leverage': Tucker_leverage_Optimizer(self.tenpy, self, A, args),
-            # 'Countsketch': Tucker_countsketch_Optimizer(self.tenpy, self, A, args),
-            # 'Countsketch-su': Tucker_countsketch_su_Optimizer(self.tenpy, self, A, args)
+            'DT':
+            Tuckerformat_DTALS_Optimizer(self.tenpy, self, A),
+            'Leverage':
+            Tuckerformat_leverage_Optimizer(self.tenpy, self, A, args),
+            'Countsketch':
+            Tuckerformat_countsketch_Optimizer(self.tenpy, self, A, args),
+            # 'Countsketch-su': Tuckerformat_countsketch_su_Optimizer(self.tenpy, self, A, args)
         }
         optimizer = optimizer_list[method]
 
@@ -156,3 +162,164 @@ class Tuckerformat_DTALS_Optimizer(object):
             q, _ = self.tenpy.qr(reshaped_core)
             self.A[d] = q[:, :R].transpose() @ self.T.outer_factors[d]
         return self.A
+
+
+class Tuckerformat_ALS_leverage_base(ALS_leverage_base):
+    def __init__(self, tenpy, T, A, args):
+        ALS_leverage_base.__init__(self, tenpy, T, A, args)
+
+    def rhs_sample(self, k, idx, weights):
+        # sample the tensor
+        rhs = []
+        for s_i in range(self.sample_size):
+            mat = []
+            for j in range(k):
+                factor = self.T.outer_factors[j]
+                R_true = factor.shape[0]
+                mat.append(factor[:, idx[j][s_i]].reshape((R_true, 1)))
+            mat.append(self.T.outer_factors[k])
+            for j in range(k + 1, self.order):
+                factor = self.T.outer_factors[j]
+                R_true = factor.shape[0]
+                mat.append(factor[:, idx[j][s_i]].reshape((R_true, 1)))
+            # sequence affects the efficiency
+            out_slice = ttmc(self.tenpy,
+                             self.T.T_core,
+                             mat,
+                             sequence=[(k + 1) % self.order,
+                                       (k + 2) % self.order, k])
+
+            rhs.append(out_slice.reshape(-1) * weights[s_i])
+        # TODO: change this to general tenpy?
+        return np.asarray(rhs)
+
+
+class Tuckerformat_ALS_countsketch_base(ALS_countsketch_base):
+    def __init__(self, tenpy, T, A, args):
+        ALS_countsketch_base.__init__(self, tenpy, T, A, args)
+
+    def _build_tensor_embeddings(self):
+        t0 = time.time()
+        self.sketched_Ts = []
+        for dim in range(self.order):
+            hashed_indices = self.hashed_indices_factors[dim]
+            rand_signs = self.rand_signs_factors[dim]
+
+            indices = [i for i in range(dim)
+                       ] + [i for i in range(dim + 1, self.order)]
+            # sample_size x R^{N-1}
+            sketched_factors = kronecker_tensorsketch(
+                self.tenpy, self.T.outer_factors, indices, self.sample_size,
+                hashed_indices, rand_signs)
+            # R x R^{N-1} @ R^{N-1} x sample_size
+            reshaped_core = matricize_tensor(
+                self.tenpy, self.T.T_core, dim) @ sketched_factors.transpose()
+            # s x R @ R x sample_size
+            sketched_mat_T = self.T.outer_factors[dim].transpose(
+            ) @ reshaped_core
+            assert sketched_mat_T.shape == (self.T.shape[dim],
+                                            self.sample_size)
+            self.sketched_Ts.append(sketched_mat_T.transpose())
+        t1 = time.time()
+        self.tenpy.printf("Build tensor embeddings took", t1 - t0, "seconds")
+
+
+class Tuckerformat_ALS_countsketch_su_base(Tuckerformat_ALS_countsketch_base,
+                                           ALS_countsketch_su_base):
+    def __init__(self, tenpy, T, A, args):
+        # Tuckerformat_ALS_countsketch_base.__init__(self, tenpy, T, A, args)
+        ALS_countsketch_su_base.__init__(self, tenpy, T, A, args)
+
+    def _build_embedding_core(self):
+        t0 = time.time()
+        indices = [i for i in range(self.order)]
+        self.hashed_indices_core = [
+            np.random.choice(self.sample_size_core,
+                             self.A[i].shape[1],
+                             replace=True) for i in indices
+        ]
+        self.rand_signs_core = [
+            np.random.choice(2, self.A[i].shape[1], replace=True) * 2 - 1
+            for i in indices
+        ]
+
+        indices = [i for i in range(self.order)]
+        # sample_size x R^{N}
+        sketched_factors = kronecker_tensorsketch(
+            self.tenpy, self.T.outer_factors, indices, self.sample_size_core,
+            self.hashed_indices_core, self.rand_signs_core)
+        # 1 x R^{N} @ R^{N} x sample_size
+        sketched_mat_T = self.T.T_core.reshape(
+            (1, -1)) @ sketched_factors.transpose()
+
+        assert sketched_mat_T.shape == (1, self.sample_size_core)
+        self.sketched_T_core = sketched_mat_T.transpose()
+        t1 = time.time()
+        self.tenpy.printf("Build embedding core", t1 - t0, "seconds")
+
+
+class Tuckerformat_leverage_Optimizer(Tuckerformat_ALS_leverage_base):
+    def __init__(self, tenpy, T, A, args):
+        Tuckerformat_ALS_leverage_base.__init__(self, tenpy, T, A, args)
+        self.core_dims = args.hosvd_core_dim
+        self.core = tenpy.random(self.core_dims)
+
+    def _solve(self, lhs, rhs, k):
+        self.A[k], self.core = one_mode_solve(self.tenpy, lhs, rhs, self.R, k,
+                                              self.core_dims, self.order)
+
+    def _form_lhs(self, list_a):
+        return kron_products(list_a)
+
+
+class Tuckerformat_countsketch_Optimizer(Tuckerformat_ALS_countsketch_base):
+    def __init__(self, tenpy, T, A, args):
+        Tuckerformat_ALS_countsketch_base.__init__(self, tenpy, T, A, args)
+        self.core = tenpy.random(self.core_dims)
+
+    def _solve(self, lhs, rhs, k):
+        self.A[k], self.core = one_mode_solve(self.tenpy, lhs, rhs, self.R, k,
+                                              self.core_dims, self.order)
+
+    def _form_lhs(self, k):
+        indices = [i for i in range(k)] + [i for i in range(k + 1, self.order)]
+        return kronecker_tensorsketch(self.tenpy, self.A, indices,
+                                      self.sample_size,
+                                      self.hashed_indices_factors[k],
+                                      self.rand_signs_factors[k])
+
+
+class Tuckerformat_countsketch_su_Optimizer(
+        Tuckerformat_ALS_countsketch_su_base):
+    def __init__(self, tenpy, T, A, args):
+        Tuckerformat_ALS_countsketch_su_base.__init__(self, tenpy, T, A, args)
+        self.core = tenpy.random(self.core_dims)
+
+    def _solve(self, lhs, rhs, k):
+        core_reshape = matricize_tensor(self.tenpy, self.core, k).transpose()
+        lhs = lhs @ core_reshape
+        mat = self.tenpy.solve(
+            self.tenpy.transpose(lhs) @ lhs,
+            self.tenpy.transpose(lhs) @ rhs)
+        q, _ = self.tenpy.qr(mat.transpose())
+        self.A[k] = q.transpose()
+
+    def _solve_core(self, lhs, rhs):
+        core_vec = self.tenpy.solve(
+            self.tenpy.transpose(lhs) @ lhs,
+            self.tenpy.transpose(lhs) @ rhs)
+        self.core = core_vec.reshape(self.core_dims)
+
+    def _form_lhs(self, k):
+        indices = [i for i in range(k)] + [i for i in range(k + 1, self.order)]
+        return kronecker_tensorsketch(self.tenpy, self.A, indices,
+                                      self.sample_size,
+                                      self.hashed_indices_factors[k],
+                                      self.rand_signs_factors[k])
+
+    def _form_lhs_core(self):
+        indices = [i for i in range(self.order)]
+        return kronecker_tensorsketch(self.tenpy, self.A, indices,
+                                      self.sample_size_core,
+                                      self.hashed_indices_core,
+                                      self.rand_signs_core)

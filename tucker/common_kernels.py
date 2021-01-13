@@ -3,6 +3,28 @@ import sys
 import time
 
 
+def one_mode_solve(tenpy, lhs, rhs, R, k, core_dims, order):
+    q, r = tenpy.qr(lhs)
+    mod_rhs = tenpy.transpose(q) @ rhs
+    u, s, vt = tenpy.svd(mod_rhs, R)
+    A_core = np.linalg.inv(r) @ u @ tenpy.diag(s) @ vt
+
+    # # Not optimal implementation
+    # A_core = self.tenpy.solve(
+    #     self.tenpy.transpose(lhs) @ lhs,
+    #     self.tenpy.transpose(lhs) @ rhs)
+
+    U, s, out_A = tenpy.svd(A_core, R)
+    out_core = (U @ np.diag(s)).reshape(core_dims)
+
+    index = list(range(order))
+    index[k] = order - 1
+    for i in range(k + 1, order):
+        index[i] = i - 1
+    out_core = tenpy.transpose(out_core, tuple(index))
+    return out_A, out_core
+
+
 def kron_products(list_a):
     out = list_a[0]
     for i in range(1, len(list_a)):
@@ -33,13 +55,15 @@ def n_mode_eigendec(tenpy, T, n, rank, do_flipsign=True):
     return V
 
 
-def ttmc(tenpy, T, A, transpose=False):
+def ttmc(tenpy, T, A, transpose=False, sequence=None):
     """
     Tensor times matrix contractions
     """
+    if sequence == None:
+        sequence = range(T.ndim)
     dims = T.ndim
     X = T.copy()
-    for n in range(dims):
+    for n in sequence:
         str1 = "".join([chr(ord('a') + j) for j in range(n)]) + "y" + "".join(
             [chr(ord('a') + j) for j in range(n + 1, dims)])
         str3 = "".join([chr(ord('a') + j) for j in range(n)]) + "z" + "".join(

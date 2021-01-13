@@ -10,10 +10,10 @@ import numpy as np
 
 class Arguments():
     def __init__(self, R, s, epsilon, order, method, seed, tensor, num_iter,
-                 hosvd):
+                 hosvd, decomposition, sparsity, rank_ratio):
         self.backend = "numpy"
         self.num_iter = num_iter
-        self.decomposition = "Tucker"
+        self.decomposition = decomposition
         self.hosvd = hosvd
         self.order = order
         self.tensor = tensor
@@ -23,6 +23,8 @@ class Arguments():
         self.seed = seed
         self.epsilon = epsilon
         self.hosvd_core_dim = [R for _ in range(order)]
+        self.sparsity = sparsity
+        self.rank_ratio = rank_ratio
 
         self.load_tensor = ''
         self.experiment_prefix = ""
@@ -31,6 +33,9 @@ class Arguments():
         self.res_calc_freq = 1
         self.outer_iter = 1
         self.save_tensor = False
+        self.pp_debug = False
+        self.tol_restart_dt = 0.1
+        self.pp_with_correction = False
 
 
 def bench(size=200,
@@ -41,7 +46,10 @@ def bench(size=200,
           num_iter=5,
           order=3,
           method='DT',
-          hosvd=0):
+          hosvd=0,
+          decomposition="Tucker_simulate",
+          sparsity=0.05,
+          rank_ratio=5):
     outer_list = []
     for seed in seeds:
         args = Arguments(R=rank,
@@ -52,21 +60,27 @@ def bench(size=200,
                          seed=seed,
                          tensor=tensor,
                          num_iter=num_iter,
-                         hosvd=hosvd)
+                         hosvd=hosvd,
+                         decomposition=decomposition,
+                         sparsity=sparsity,
+                         rank_ratio=rank_ratio)
         out, _, _, _ = run_als.run_als(args)
         out_fit = [l[2] for l in out]
         print(f"{seed}, {out}")
         outer_list.append([seed, np.max(out_fit)])
 
     for l in outer_list:
-        print(l)
+        print(f"[1, {l[1]}, 0],")
 
 
 if __name__ == "__main__":
     bench(size=200,
           rank=6,
-          epsilon=0.125,
-          seeds=[7],
+          epsilon=0.5,
+          seeds=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
           tensor="random",
-          method="Countsketch-su",
-          hosvd=0)
+          method="Countsketch",
+          hosvd=0,
+          decomposition="Tucker",
+          sparsity=0.005,
+          rank_ratio=1.5)

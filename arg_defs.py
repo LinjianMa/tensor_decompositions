@@ -176,6 +176,11 @@ def add_tucker_rank_ratio_arguments(parser):
         type=float,
         metavar='float',
         help='ratio of the true rank over the decomp rank for random tensors.')
+    parser.add_argument('--sparsity',
+                        default=1.,
+                        type=float,
+                        metavar='float',
+                        help='Sparity of the factor matrices.')
 
 
 def get_file_prefix(args):

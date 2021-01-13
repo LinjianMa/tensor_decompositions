@@ -304,8 +304,8 @@ def run_als_tucker(args, tenpy, csv_file):
             for i in range(T.ndim)
         ]
 
-    ret_list = T.Tucker_ALS(A, args.num_iter, args.method, args,
-                            args.res_calc_freq)
+    ret_list = Tucker_ALS(tenpy, A, T, args.num_iter, csv_file, Regu,
+                          args.method, args, args.res_calc_freq)
     num_iters_map, time_map, pp_init_iter = None, None, None
 
     if args.backend == "ctf":
@@ -331,7 +331,7 @@ def run_als_tucker_simulate(args, tenpy, csv_file):
             rvs = norm(loc=0.0, scale=1.0).rvs
             mat = random(args.s,
                          int(ratio * args.hosvd_core_dim[0]),
-                         density=0.05,
+                         density=args.sparsity,
                          random_state=args.seed * i,
                          data_rvs=rvs).A
             mat = mat / tenpy.vecnorm(mat)

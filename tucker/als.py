@@ -1,7 +1,7 @@
 import numpy as np
 import queue
 import scipy
-from .common_kernels import n_mode_eigendec, kron_products, count_sketch, matricize_tensor
+from .common_kernels import n_mode_eigendec, kron_products, count_sketch, matricize_tensor, one_mode_solve
 from cpd.common_kernels import krp
 from als.als_optimizer import DTALS_base, PPALS_base, ALS_leverage_base, ALS_countsketch_base, ALS_countsketch_su_base
 
@@ -13,24 +13,8 @@ class Tucker_leverage_Optimizer(ALS_leverage_base):
         self.core = tenpy.random(self.core_dims)
 
     def _solve(self, lhs, rhs, k):
-        q, r = self.tenpy.qr(lhs)
-        mod_rhs = self.tenpy.transpose(q) @ rhs
-        u, s, vt = self.tenpy.svd(mod_rhs, self.R)
-        A_core = np.linalg.inv(r) @ u @ self.tenpy.diag(s) @ vt
-        U, s, self.A[k] = self.tenpy.svd(A_core, self.R)
-        self.core = (U @ np.diag(s)).reshape(self.core_dims)
-
-        index = list(range(self.order))
-        index[k] = self.order - 1
-        for i in range(k + 1, self.order):
-            index[i] = i - 1
-        self.core = self.tenpy.transpose(self.core, tuple(index))
-
-        # Not optimal implementation
-        # A_core = self.tenpy.solve(
-        #     self.tenpy.transpose(lhs) @ lhs,
-        #     self.tenpy.transpose(lhs) @ rhs)
-        # _, _, self.A[k] = self.tenpy.rsvd(A_core, self.R)
+        self.A[k], self.core = one_mode_solve(self.tenpy, lhs, rhs, self.R, k,
+                                              self.core_dims, self.order)
 
     def _form_lhs(self, list_a):
         return kron_products(list_a)
@@ -59,18 +43,8 @@ class Tucker_countsketch_Optimizer(ALS_countsketch_base):
         self.core = tenpy.random(self.core_dims)
 
     def _solve(self, lhs, rhs, k):
-        q, r = self.tenpy.qr(lhs)
-        mod_rhs = self.tenpy.transpose(q) @ rhs
-        u, s, vt = self.tenpy.svd(mod_rhs, self.core_dims[k])
-        A_core = np.linalg.inv(r) @ u @ self.tenpy.diag(s) @ vt
-        U, s, self.A[k] = self.tenpy.svd(A_core, self.core_dims[k])
-
-        self.core = (U @ np.diag(s)).reshape(self.core_dims)
-        index = list(range(self.order))
-        index[k] = self.order - 1
-        for i in range(k + 1, self.order):
-            index[i] = i - 1
-        self.core = self.tenpy.transpose(self.core, tuple(index))
+        self.A[k], self.core = one_mode_solve(self.tenpy, lhs, rhs, self.R, k,
+                                              self.core_dims, self.order)
 
     def _form_lhs(self, k):
         indices = [i for i in range(k)] + [i for i in range(k + 1, self.order)]

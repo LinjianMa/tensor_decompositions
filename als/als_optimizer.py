@@ -109,6 +109,8 @@ class ALS_leverage_base():
                                  p=self.p_distributions[i])
                 for _ in range(self.sample_size)
             ]
+            # deterministic sampling
+            # idx_one_mode = np.asarray(self.p_distributions[i]).argsort()[len(self.p_distributions[i]) - self.sample_size:][::-1]
             weights = [
                 weights[j] * self.p_distributions[i][idx_one_mode[j]]
                 for j in range(self.sample_size)
@@ -127,7 +129,7 @@ class ALS_leverage_base():
                 if j == k:
                     continue
                 list_a.append(self.A[j][:, idx[j][s_i]])
-            lhs.append(self._form_lhs(list_a))
+            lhs.append(self._form_lhs(list_a) * weights[s_i])
         # TODO: change this to general tenpy?
         return np.asarray(lhs)
 
@@ -138,11 +140,11 @@ class ALS_leverage_base():
             sample_idx = [idx[j][s_i] for j in range(k)]
             sample_idx += [slice(None)]
             sample_idx += [idx[j][s_i] for j in range(k + 1, self.order)]
-            rhs.append(self.T[tuple(sample_idx)])
+            rhs.append(self.T[tuple(sample_idx)] * weights[s_i])
         # TODO: change this to general tenpy?
         return np.asarray(rhs)
 
-    def step(self, Regu):
+    def step(self, Regu=0):
         for l in range(self.outer_iter):
             for k in range(self.order):
                 # get the sampling indices
@@ -170,12 +172,12 @@ class ALS_countsketch_base():
         self.core_dims = args.hosvd_core_dim
         tenpy.printf(
             f"Countsketch sample size is {self.sample_size}, rank is {self.R}")
-        self._build_embeddings()
+        self._build_matrices_embeddings()
+        self._build_tensor_embeddings()
 
-    def _build_embeddings(self):
+    def _build_matrices_embeddings(self):
         self.hashed_indices_factors = []
         self.rand_signs_factors = []
-        self.sketched_Ts = []
         for dim in range(self.order):
             indices = [i for i in range(dim)
                        ] + [i for i in range(dim + 1, self.order)]
@@ -190,6 +192,12 @@ class ALS_countsketch_base():
             ]
             self.hashed_indices_factors.append(hashed_indices)
             self.rand_signs_factors.append(rand_signs)
+
+    def _build_tensor_embeddings(self):
+        self.sketched_Ts = []
+        for dim in range(self.order):
+            hashed_indices = self.hashed_indices_factors[dim]
+            rand_signs = self.rand_signs_factors[dim]
 
             signs_tensor = kron_products(rand_signs)
             indices_tensor = hashed_indices[-1]
@@ -220,7 +228,7 @@ class ALS_countsketch_base():
     def _form_lhs(self, k):
         return
 
-    def step(self, Regu):
+    def step(self, Regu=1e-7):
         for l in range(self.outer_iter):
             for k in range(self.order):
                 lhs = self._form_lhs(k)
@@ -284,7 +292,7 @@ class ALS_countsketch_su_base(ALS_countsketch_base):
     def _form_lhs_core(self):
         return
 
-    def step(self, Regu):
+    def step(self, Regu=1e-7):
         for l in range(self.outer_iter):
             for k in range(self.order):
                 lhs = self._form_lhs(k)
