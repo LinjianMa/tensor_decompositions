@@ -132,6 +132,11 @@ def add_leverage_sampling_arguments(parser):
                         type=float,
                         metavar='float',
                         help='epsilon used in the leverage score sampling')
+    parser.add_argument('--fix-percentage',
+                        default=0.,
+                        type=float,
+                        metavar='float',
+                        help='percentage of leverage samples to be fixed')
     parser.add_argument('--outer-iter',
                         type=int,
                         default=1,

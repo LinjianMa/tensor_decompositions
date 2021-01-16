@@ -10,7 +10,7 @@ import numpy as np
 
 class Arguments():
     def __init__(self, R, s, epsilon, order, method, seed, tensor, num_iter,
-                 hosvd, decomposition, sparsity, rank_ratio):
+                 hosvd, decomposition, sparsity, rank_ratio, fix_percentage):
         self.backend = "numpy"
         self.num_iter = num_iter
         self.decomposition = decomposition
@@ -25,6 +25,7 @@ class Arguments():
         self.hosvd_core_dim = [R for _ in range(order)]
         self.sparsity = sparsity
         self.rank_ratio = rank_ratio
+        self.fix_percentage = fix_percentage
 
         self.load_tensor = ''
         self.experiment_prefix = ""
@@ -49,7 +50,8 @@ def bench(size=200,
           hosvd=0,
           decomposition="Tucker_simulate",
           sparsity=0.05,
-          rank_ratio=5):
+          rank_ratio=5,
+          fix_percentage=0.):
     outer_list = []
     for seed in seeds:
         args = Arguments(R=rank,
@@ -63,24 +65,26 @@ def bench(size=200,
                          hosvd=hosvd,
                          decomposition=decomposition,
                          sparsity=sparsity,
-                         rank_ratio=rank_ratio)
+                         rank_ratio=rank_ratio,
+                         fix_percentage=fix_percentage)
         out, _, _, _ = run_als.run_als(args)
         out_fit = [l[2] for l in out]
         print(f"{seed}, {out}")
         outer_list.append([seed, np.max(out_fit)])
 
     for l in outer_list:
-        print(f"[1, {l[1]}, 0],")
+        print(f"[1, {l[1]}, 1],")
 
 
 if __name__ == "__main__":
-    bench(size=200,
-          rank=6,
+    bench(size=2000,
+          rank=10,
           epsilon=0.5,
-          seeds=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-          tensor="random",
-          method="Countsketch",
+          seeds=[2],
+          tensor="random_bias",
+          method="Leverage",
           hosvd=0,
-          decomposition="Tucker",
-          sparsity=0.005,
-          rank_ratio=1.5)
+          decomposition="Tucker_simulate",
+          sparsity=0.5,
+          rank_ratio=5,
+          fix_percentage=0.)

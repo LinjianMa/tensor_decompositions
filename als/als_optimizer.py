@@ -82,11 +82,14 @@ class ALS_leverage_base():
         self.R = A[0].shape[0]
         self.epsilon = args.epsilon
         self.outer_iter = args.outer_iter
+        self.fix_percentage = args.fix_percentage
         self.p_distributions = [
             leverage_scores(self.tenpy, self.A[i]) / self.R
             for i in range(self.order)
         ]
-        self.sample_size = int(self.R**(self.order - 1) / (self.epsilon**2))
+        assert self.order == 3
+        self.sample_size_per_mode = int(self.R / self.epsilon)
+        self.sample_size = self.sample_size_per_mode * self.sample_size_per_mode
         tenpy.printf(
             f"Leverage sample size is {self.sample_size}, rank is {self.R}")
 
@@ -101,23 +104,34 @@ class ALS_leverage_base():
     def sample_krp_leverage(self, k):
         idx = [None for _ in range(self.order)]
         weights = [1. for _ in range(self.sample_size)]
-        for i in range(self.order):
-            if i == k:
-                continue
-            idx_one_mode = [
-                np.random.choice(np.arange(self.T.shape[i]),
-                                 p=self.p_distributions[i])
-                for _ in range(self.sample_size)
-            ]
-            # deterministic sampling
-            # idx_one_mode = np.asarray(self.p_distributions[i]).argsort()[len(self.p_distributions[i]) - self.sample_size:][::-1]
-            weights = [
-                weights[j] * self.p_distributions[i][idx_one_mode[j]]
-                for j in range(self.sample_size)
-            ]
-            idx[i] = idx_one_mode
+        indices = [i for i in range(self.order) if i != k]
+        for i, v in enumerate(indices):
+            if self.fix_percentage == 0.:
+                idx_one_mode = [
+                    np.random.choice(np.arange(self.T.shape[v]),
+                                     p=self.p_distributions[v])
+                    for _ in range(self.sample_size)
+                ]
+                weights = [
+                    weights[j] * self.p_distributions[v][idx_one_mode[j]]
+                    for j in range(self.sample_size)
+                ]
+                idx[v] = idx_one_mode
+            else:
+                # deterministic sampling
+                idx_one_mode = np.asarray(self.p_distributions[v]).argsort()[len(self.p_distributions[v]) - self.sample_size_per_mode:][::-1]
+                if i == 0:
+                    idx[v] = kron_products([np.ones(self.sample_size_per_mode), idx_one_mode]).astype('int') 
+                elif i == 1:
+                    idx[v] = kron_products([idx_one_mode, np.ones(self.sample_size_per_mode)]).astype('int') 
+                else:
+                    raise NotImplementedError
+
         assert len(idx) == self.order
-        weights = 1. / (np.sqrt(self.sample_size * np.asarray(weights)))
+        if self.fix_percentage == 0.:
+            weights = 1. / (np.sqrt(self.sample_size * np.asarray(weights)))
+        else:
+            weights = [1. for _ in range(self.sample_size)]
         return idx, weights
 
     def lhs_sample(self, k, idx, weights):

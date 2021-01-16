@@ -342,7 +342,28 @@ def run_als_tucker_simulate(args, tenpy, csv_file):
         T_core = ttmc(tenpy, T_core, rs, transpose=True)
         T = Tuckerformat(T_core, factors, tenpy)
     elif args.tensor == "random_bias":
-        raise NotImplementedError
+        tenpy.printf("Testing random tensor")
+        from tucker.common_kernels import ttmc
+        ratio = args.rank_ratio
+        shape = int(ratio * args.hosvd_core_dim[0]) * np.ones(
+            args.order).astype(int)
+        T_core = tenpy.random(shape)
+        factors = []
+        rs = []
+        for i in range(T_core.ndim):
+            rvs = norm(loc=0.0, scale=1.0).rvs
+            mat = random(args.s,
+                         int(ratio * args.hosvd_core_dim[0]),
+                         density=args.sparsity,
+                         random_state=args.seed * i,
+                         data_rvs=rvs).A
+            mat = mat / tenpy.vecnorm(mat)
+            # size s x R
+            Q, r = tenpy.qr(mat)
+            factors.append(Q.transpose())
+            rs.append(r)
+        T_core = ttmc(tenpy, T_core, rs, transpose=True)
+        T = Tuckerformat(T_core, factors, tenpy)
 
     tenpy.printf("The shape of the input tensor core is: ", T_core.shape)
     tenpy.printf("The size of the input tensor mode is: ", factors[0].shape[1])
