@@ -184,7 +184,7 @@ def einsum(string, *args):
     if FAST_KERNEL:
         out = einsum_batched_matmul(string, *args)
     else:
-        out = np.einsum(string, *args)
+        out = np.einsum(string, *args, optimize=True)
     return out
 
 

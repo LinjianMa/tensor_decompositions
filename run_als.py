@@ -363,7 +363,17 @@ def run_als_tucker_simulate(args, tenpy, csv_file):
             factors.append(Q.transpose())
             rs.append(r)
         T_core = ttmc(tenpy, T_core, rs, transpose=True)
-        T = Tuckerformat(T_core, factors, tenpy)
+        nrm = tenpy.vecnorm(T_core)
+        bias_size = 10
+        bias_dict = dict()
+        for i in range(bias_size):
+            key = tuple([np.random.randint(args.s) for _ in range(args.order)])
+            value = np.random.normal(loc=nrm / bias_size, scale=1.0)
+            if key in bias_dict:
+                bias_dict[key] += value
+            else:
+                bias_dict[key] = value
+        T = Tuckerformat(T_core, factors, tenpy, bias_dict)
 
     tenpy.printf("The shape of the input tensor core is: ", T_core.shape)
     tenpy.printf("The size of the input tensor mode is: ", factors[0].shape[1])

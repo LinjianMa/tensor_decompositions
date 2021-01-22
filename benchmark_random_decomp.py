@@ -68,23 +68,35 @@ def bench(size=200,
                          rank_ratio=rank_ratio,
                          fix_percentage=fix_percentage)
         out, _, _, _ = run_als.run_als(args)
-        out_fit = [l[2] for l in out]
+        out_fit = [l[2] for l in out[1:]]
         print(f"{seed}, {out}")
         outer_list.append([seed, np.max(out_fit)])
 
     for l in outer_list:
-        print(f"[1, {l[1]}, 1],")
+        print(f"[3, {l[1]}, 0],")
 
 
 if __name__ == "__main__":
+    # bench(size=200,
+    #       rank=6,
+    #       epsilon=0.5,
+    #       seeds=[1,2,3,4,5,6,7,8,9,10],
+    #       tensor="random",
+    #       method="Countsketch",
+    #       hosvd=0,
+    #       decomposition="Tucker",
+    #       sparsity=0.5,
+    #       rank_ratio=10,
+    #       fix_percentage=0.)
+
     bench(size=2000,
           rank=10,
           epsilon=0.5,
-          seeds=[2],
+          seeds=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
           tensor="random_bias",
           method="Leverage",
           hosvd=0,
           decomposition="Tucker_simulate",
           sparsity=0.5,
           rank_ratio=5,
-          fix_percentage=0.)
+          fix_percentage=0.0)

@@ -177,7 +177,7 @@ def rrf(tenpy, T, ranks, epsilon, countsketch=False):
                                  scale=std_gaussian,
                                  size=(reshaped_T.shape[1], sample_size))
         embed_T = reshaped_T @ omega
-        q, _ = tenpy.qr(embed_T)
+        q, _, _ = tenpy.svd(embed_T)
         A[d] = q[:, :ranks[d]].T
     return A
 
