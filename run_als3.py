@@ -89,12 +89,14 @@ def run_als(args):
             T = np.load(f)
             if tenpy.name() == 'ctf':
                 T = tenpy.from_nparray(T)
+    elif args.tensor == "graph":
+        T = real_tensors.graph_state_5_party(tenpy)
 
     tenpy.printf(f"The shape of the input tensor is: {T.shape}")
 
-    X = tenpy.random((R, T.shape[0]))
-    Y = tenpy.random((R, T.shape[1]))
-    Z = tenpy.random((R, T.shape[2]))
+    X = tenpy.random((R, T.shape[0])) + 1j * tenpy.random((R, T.shape[0]))
+    Y = tenpy.random((R, T.shape[1])) + 1j * tenpy.random((R, T.shape[1]))
+    Z = tenpy.random((R, T.shape[2])) + 1j * tenpy.random((R, T.shape[2]))
 
     optimizer_list = {
         'DT-quad': quad_als_optimizer(tenpy, T, X, Y),
@@ -158,8 +160,9 @@ def run_als(args):
             time_all += t1 - t0
             if (i % res_calc_freq == 0 or i == args.num_iter - 1
                     or not flag_dt):
-                res = get_residual(tenpy, optimizer.mttkrp_last_mode,
-                                   [X, Y, Z], normT)
+                res = tenpy.norm(
+                    T - tenpy.einsum("ka,kb,kc->abc", X, Y, Z)
+                )  #get_residual(tenpy, optimizer.mttkrp_last_mode, [X, Y, Z], normT)
                 fitness = 1 - res / normT
                 fitness_diff = abs(fitness - fitness_old)
                 fitness_old = fitness
@@ -208,9 +211,10 @@ if __name__ == "__main__":
             'random',
             'random_col',
             'scf',
+            'graph',
         ],
         help=
-        'choose tensor to test, available: random, random_col, scf (default: random)'
+        'choose tensor to test, available: random, random_col, scf, graph (default: random)'
     )
     parser.add_argument('--col',
                         type=float,

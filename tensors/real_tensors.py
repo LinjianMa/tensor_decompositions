@@ -5,6 +5,29 @@ from scipy.io import loadmat
 from .utils import download_unzip_data, load_images_from_folder
 
 
+def graph_state_5_party(tenpy):
+    zero = np.asarray([1., 0.])
+    one = np.asarray([0., 1.])
+    plus = 1. / np.sqrt(2) * np.asarray([1., 1.])
+    minus = 1. / np.sqrt(2) * np.asarray([1., -1.])
+
+    out1 = 1. / np.sqrt(2) * np.einsum("a,b,c,d,e->abcde", zero, plus, zero,
+                                       minus, one)
+    out2 = 1. / 2 * np.einsum("a,b,c,d,e->abcde", plus, zero, minus, one, plus)
+    out3 = 1. / 2 * np.einsum("a,b,c,d,e->abcde", minus, one, plus, one, plus)
+    out4 = 1. / 2 * np.einsum("a,b,c,d,e->abcde", plus, zero, plus, zero,
+                              minus)
+    out5 = 1. / np.sqrt(2) * np.einsum("a,b,c,d,e->abcde", zero, minus, one,
+                                       plus, one)
+    out6 = 1. / 2 * np.einsum("a,b,c,d,e->abcde", minus, one, minus, zero,
+                              minus)
+    out = out1 + out2 + out3 + out4 + out5 + out6
+    tensor = out.transpose((0, 1, 3, 2, 4)).reshape((2, 4, 4))
+    if tenpy.name() == 'ctf':
+        return tenpy.from_nparray(tensor)
+    return tensor
+
+
 def amino_acids(tenpy):
     """
     Data: 

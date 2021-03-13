@@ -138,7 +138,7 @@ def Tucker_ALS(tenpy,
         'PP': Tucker_PPALS_Optimizer(tenpy, T, A, args),
         'Leverage': Tucker_leverage_Optimizer(tenpy, T, A, args),
         'Countsketch': Tucker_countsketch_Optimizer(tenpy, T, A, args),
-        'Countsketch-su': Tucker_countsketch_su_Optimizer(tenpy, T, A, args)
+        # 'Countsketch-su': Tucker_countsketch_su_Optimizer(tenpy, T, A, args)
     }
     optimizer = optimizer_list[method]
 
@@ -205,6 +205,8 @@ def run_als_cpd(args, tenpy, csv_file):
         T = real_tensors.time_lapse_images(tenpy)
     elif args.tensor == "scf":
         T = real_tensors.get_scf_tensor(tenpy)
+    elif args.tensor == "graph":
+        T = real_tensors.graph_state_5_party(tenpy)
 
     tenpy.printf("The shape of the input tensor is: ", T.shape)
     Regu = args.regularization

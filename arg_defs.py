@@ -38,16 +38,11 @@ def add_general_arguments(parser):
         default="random",
         metavar='string',
         choices=[
-            'random',
-            'random_col',
-            'random_bias',
-            'amino',
-            'coil100',
-            'timelapse',
-            'scf',
+            'random', 'random_col', 'random_bias', 'amino', 'coil100',
+            'timelapse', 'scf', 'graph'
         ],
         help=
-        'choose tensor to test, available: random, random_bias, random_col, amino, coil100, timelapse, scf (default: random)'
+        'choose tensor to test, available: random, random_bias, random_col, amino, coil100, timelapse, scf, graph (default: random)'
     )
     parser.add_argument(
         '--backend',

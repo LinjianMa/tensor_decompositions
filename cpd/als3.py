@@ -18,19 +18,19 @@ class als_optimizer():
         t0 = time.time()
         lam = self.lam
 
-        T_C = self.tenpy.einsum("abc,kc->kab", self.T, self.C)
-        T_B_C = self.tenpy.einsum("kab,kb->ka", T_C, self.B)
-        BB = self.tenpy.einsum("ab,cb->ac", self.B, self.B)
-        CC = self.tenpy.einsum("ab,cb->ac", self.C, self.C)
+        T_C = self.tenpy.einsum("abc,kc->kab", self.T, self.C.conj())
+        T_B_C = self.tenpy.einsum("kab,kb->ka", T_C, self.B.conj())
+        BB = self.tenpy.einsum("ab,cb->ac", self.B.conj(), self.B)
+        CC = self.tenpy.einsum("ab,cb->ac", self.C.conj(), self.C)
         S = BB * CC
         self.A = (1 - lam) * self.A + lam * self.tenpy.solve(S, T_B_C)
-        T_A_C = self.tenpy.einsum("kab,ka->kb", T_C, self.A)
-        AA = self.tenpy.einsum("ab,cb->ac", self.A, self.A)
+        T_A_C = self.tenpy.einsum("kab,ka->kb", T_C, self.A.conj())
+        AA = self.tenpy.einsum("ab,cb->ac", self.A.conj(), self.A)
         S = AA * CC
         self.B = (1 - lam) * self.B + lam * self.tenpy.solve(S, T_A_C)
-        T_A = self.tenpy.einsum("abc,ka->kbc", self.T, self.A)
-        T_A_B = self.tenpy.einsum("kbc,kb->kc", T_A, self.B)
-        BB = self.tenpy.einsum("ab,cb->ac", self.B, self.B)
+        T_A = self.tenpy.einsum("abc,ka->kbc", self.T, self.A.conj())
+        T_A_B = self.tenpy.einsum("kbc,kb->kc", T_A, self.B.conj())
+        BB = self.tenpy.einsum("ab,cb->ac", self.B.conj(), self.B)
         S = AA * BB
         self.C = (1 - lam) * self.C + lam * self.tenpy.solve(S, T_A_B)
 
