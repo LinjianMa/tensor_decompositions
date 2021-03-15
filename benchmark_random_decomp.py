@@ -51,7 +51,8 @@ def bench(size=200,
           decomposition="Tucker_simulate",
           sparsity=0.05,
           rank_ratio=5,
-          fix_percentage=0.):
+          fix_percentage=0.,
+          num=0, init=0):
     outer_list = []
     for seed in seeds:
         args = Arguments(R=rank,
@@ -72,13 +73,70 @@ def bench(size=200,
         print(f"{seed}, {out}")
         outer_list.append([seed, np.max(out_fit)])
 
+    outstr_all = ""
+    avg = 0.
     for l in outer_list:
-        print(f"[3, {l[1]}, 0],")
+        avg += l[1]
+        outstr = f"[{num}, {l[1]}, {init}],"
+        print(outstr)
+        outstr_all += f"{outstr}\n"
+    return outstr_all, avg/(len(outer_list))
+
+
+def bench_sketching_algs(size=200, rank=6, epsilon=0.5, seeds=[1], tensor="random", num_iter=5, order=3, decomposition="Tucker_simulate", sparsity=0.05, rank_ratio=5):
+    # method_list = ["Countsketch-su", "Countsketch-su"]
+    # hosvd_list = [0, 3]
+    # fix_percentage_list = [0, 0]
+    # num_list = [3, 3]
+    # init_list = [0, 1]
+    # method_list = ["DT", "DT", "Leverage", "Leverage", "Leverage", "Leverage", "Countsketch", "Countsketch"]
+    # hosvd_list = [0, 1, 0, 3, 0, 3, 0, 3]
+    # fix_percentage_list = [0, 0, 0, 0, 1, 1, 0, 0]
+    # num_list = [0, 0, 1, 1, 1.5, 1.5, 2, 2]
+    # init_list = [0, 1, 0, 1, 0, 1, 0, 1]
+    method_list = ["DT", "DT", "Leverage", "Leverage", "Leverage", "Leverage", "Countsketch", "Countsketch", "Countsketch-su", "Countsketch-su"]
+    hosvd_list = [0, 3, 0, 3, 0, 3, 0, 3, 0, 3]
+    fix_percentage_list = [0, 0, 0, 0, 1, 1, 0, 0, 0, 0]
+    num_list = [0, 0, 1, 1, 1.5, 1.5, 2, 2, 3, 3]
+    init_list = [0, 1, 0, 1, 0, 1, 0, 1, 0, 1]
+
+    # for detailed stats with rrf
+    # method_list = ["DT", "Leverage", "Leverage", "Countsketch"]
+    # hosvd_list = [1, 3, 3, 3]
+    # fix_percentage_list = [0, 0, 1, 0]
+    # num_list = [0, 1, 1.5, 2]
+    # init_list = [1, 1, 1, 1]
+
+    # method_list = ["Countsketch-su"]
+    # hosvd_list = [3]
+    # fix_percentage_list = [0]
+    # num_list = [3]
+    # init_list = [1]
+
+    out_str_all = ""
+    avg_list = []
+    for method, hosvd, fix_percentage, num, init in zip(method_list, hosvd_list, fix_percentage_list, num_list, init_list):
+        out_str, avg = bench(size=size,rank=rank,epsilon=epsilon,seeds=seeds,tensor=tensor,num_iter=num_iter,order=order,
+                      method=method,
+                      hosvd=hosvd,
+                      decomposition=decomposition,
+                      sparsity=sparsity,
+                      rank_ratio=rank_ratio,
+                      fix_percentage=fix_percentage,
+                      num=num, init=init)
+        out_str_all += out_str
+        out_str_all += "\n"
+        avg_list.append(avg)
+
+    print(out_str_all)
+    print(avg_list)
+
 
 
 if __name__ == "__main__":
+    # dense
     # bench(size=200,
-    #       rank=6,
+    #       rank=5,
     #       epsilon=0.5,
     #       seeds=[1,2,3,4,5,6,7,8,9,10],
     #       tensor="random",
@@ -86,17 +144,23 @@ if __name__ == "__main__":
     #       hosvd=0,
     #       decomposition="Tucker",
     #       sparsity=0.5,
-    #       rank_ratio=10,
+    #       rank_ratio=1.2,
     #       fix_percentage=0.)
 
-    bench(size=2000,
+    # bench_sketching_algs(size=200,
+    #       rank=5,
+    #       epsilon=1,
+    #       seeds=[1,2,3,4,5],
+    #       tensor="random_bias",
+    #       decomposition="Tucker",
+    #       sparsity=0.5,
+    #       rank_ratio=1.6)
+
+    bench_sketching_algs(size=2000,
           rank=10,
-          epsilon=0.5,
-          seeds=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+          epsilon=0.25,
+          seeds=[1,2,3,4,5,6,7,8,9,10],
           tensor="random_bias",
-          method="Leverage",
-          hosvd=0,
           decomposition="Tucker_simulate",
-          sparsity=0.5,
-          rank_ratio=5,
-          fix_percentage=0.0)
+          sparsity=0.02,
+          rank_ratio=1.2)

@@ -119,11 +119,17 @@ class ALS_leverage_base():
                 idx[v] = idx_one_mode
             else:
                 # deterministic sampling
-                idx_one_mode = np.asarray(self.p_distributions[v]).argsort()[len(self.p_distributions[v]) - self.sample_size_per_mode:][::-1]
+                idx_one_mode = np.asarray(self.p_distributions[v]).argsort(
+                )[len(self.p_distributions[v]) -
+                  self.sample_size_per_mode:][::-1]
                 if i == 0:
-                    idx[v] = kron_products([np.ones(self.sample_size_per_mode), idx_one_mode]).astype('int') 
+                    idx[v] = kron_products(
+                        [np.ones(self.sample_size_per_mode),
+                         idx_one_mode]).astype('int')
                 elif i == 1:
-                    idx[v] = kron_products([idx_one_mode, np.ones(self.sample_size_per_mode)]).astype('int') 
+                    idx[v] = kron_products(
+                        [idx_one_mode,
+                         np.ones(self.sample_size_per_mode)]).astype('int')
                 else:
                     raise NotImplementedError
 
@@ -255,7 +261,7 @@ class ALS_countsketch_su_base(ALS_countsketch_base):
     def __init__(self, tenpy, T, A, args):
         ALS_countsketch_base.__init__(self, tenpy, T, A, args)
         self.sample_size_core = self.sample_size * self.R
-        self._build_embedding_core()
+        self.init = False
 
     def _build_embedding_core(self):
         indices = [i for i in range(self.order)]
@@ -307,6 +313,9 @@ class ALS_countsketch_su_base(ALS_countsketch_base):
         return
 
     def step(self, Regu=1e-7):
+        if self.init is False:
+            self._build_embedding_core()
+            self.init = True
         for l in range(self.outer_iter):
             for k in range(self.order):
                 lhs = self._form_lhs(k)

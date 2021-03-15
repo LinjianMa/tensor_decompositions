@@ -169,7 +169,8 @@ class Tuckerformat(object):
             Tuckerformat_leverage_Optimizer(self.tenpy, self, A, args),
             'Countsketch':
             Tuckerformat_countsketch_Optimizer(self.tenpy, self, A, args),
-            # 'Countsketch-su': Tuckerformat_countsketch_su_Optimizer(self.tenpy, self, A, args)
+            'Countsketch-su':
+            Tuckerformat_countsketch_su_Optimizer(self.tenpy, self, A, args)
         }
         optimizer = optimizer_list[method]
 

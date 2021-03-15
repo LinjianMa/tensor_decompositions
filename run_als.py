@@ -14,8 +14,6 @@ from pathlib import Path
 from os.path import dirname, join
 from backend import profiler
 from utils import save_decomposition_results
-from scipy.stats import norm
-from scipy.sparse import random
 
 parent_dir = dirname(__file__)
 results_dir = join(parent_dir, 'results')
@@ -138,7 +136,7 @@ def Tucker_ALS(tenpy,
         'PP': Tucker_PPALS_Optimizer(tenpy, T, A, args),
         'Leverage': Tucker_leverage_Optimizer(tenpy, T, A, args),
         'Countsketch': Tucker_countsketch_Optimizer(tenpy, T, A, args),
-        # 'Countsketch-su': Tucker_countsketch_su_Optimizer(tenpy, T, A, args)
+        'Countsketch-su': Tucker_countsketch_su_Optimizer(tenpy, T, A, args)
     }
     optimizer = optimizer_list[method]
 
@@ -160,7 +158,7 @@ def Tucker_ALS(tenpy,
 
             if tenpy.is_master_proc():
                 print(
-                    f"[ {i} ] Residual is {res}, fitness is: {fitness}, d_fit is: {d_fit}"
+                    f"[ {i} ] Residual is {res}, fitness is: {fitness}, d_fit is: {d_fit}, core_norm is: {tenpy.vecnorm(optimizer.core)}"
                 )
                 ret_list.append([i, res, fitness, d_fit])
                 if csv_file is not None:
@@ -252,22 +250,16 @@ def run_als_tucker(args, tenpy, csv_file):
         T = tenpy.load_tensor_from_file(args.load_tensor + 'tensor.npy')
     elif args.tensor == "random":
         tenpy.printf("Testing random tensor")
-        from tucker.common_kernels import ttmc
-        ratio = args.rank_ratio
-        shape = int(ratio * args.hosvd_core_dim[0]) * np.ones(
-            args.order).astype(int)
-        T = tenpy.random(shape)
-        A = []
-        for i in range(T.ndim):
-            mat = tenpy.random((args.s, int(ratio * args.hosvd_core_dim[0])))
-            Q, _ = tenpy.qr(mat)
-            A.append(Q)
-        T = ttmc(tenpy, T, A, transpose=True)
+        T = synthetic_tensors.init_rand_tucker(tenpy, args.rank_ratio,
+                                               args.hosvd_core_dim, args.order,
+                                               args.s, args.seed)
     elif args.tensor == "random_bias":
         tenpy.printf("Testing biased random tensor")
         sizes = [args.s] * args.order
-        T = synthetic_tensors.init_rand_bias(tenpy, args.order, sizes, args.R,
-                                             args.seed)
+        T = synthetic_tensors.init_rand_bias_tucker(tenpy, args.rank_ratio,
+                                                    args.hosvd_core_dim,
+                                                    args.order, args.s,
+                                                    args.seed)
     elif args.tensor == "random_col":
         T = synthetic_tensors.init_const_collinearity_tensor(
             tenpy, args.s, args.order, args.R, args.col, args.seed)
@@ -317,68 +309,20 @@ def run_als_tucker(args, tenpy, csv_file):
 
 def run_als_tucker_simulate(args, tenpy, csv_file):
 
-    from tucker.tucker_format import Tuckerformat
-
     assert args.tensor in ["random", "random_bias"]
     if args.tensor == "random":
         tenpy.printf("Testing random tensor")
-        from tucker.common_kernels import ttmc
-        ratio = args.rank_ratio
-        shape = int(ratio * args.hosvd_core_dim[0]) * np.ones(
-            args.order).astype(int)
-        T_core = tenpy.random(shape)
-        factors = []
-        rs = []
-        for i in range(T_core.ndim):
-            rvs = norm(loc=0.0, scale=1.0).rvs
-            mat = random(args.s,
-                         int(ratio * args.hosvd_core_dim[0]),
-                         density=args.sparsity,
-                         random_state=args.seed * i,
-                         data_rvs=rvs).A
-            mat = mat / tenpy.vecnorm(mat)
-            # size s x R
-            Q, r = tenpy.qr(mat)
-            factors.append(Q.transpose())
-            rs.append(r)
-        T_core = ttmc(tenpy, T_core, rs, transpose=True)
-        T = Tuckerformat(T_core, factors, tenpy)
+        T = synthetic_tensors.init_rand_sparse_tucker(args.rank_ratio,
+                                                      args.hosvd_core_dim,
+                                                      args.order, tenpy,
+                                                      args.s, args.sparsity,
+                                                      args.seed)
     elif args.tensor == "random_bias":
         tenpy.printf("Testing random tensor")
-        from tucker.common_kernels import ttmc
-        ratio = args.rank_ratio
-        shape = int(ratio * args.hosvd_core_dim[0]) * np.ones(
-            args.order).astype(int)
-        T_core = tenpy.random(shape)
-        factors = []
-        rs = []
-        for i in range(T_core.ndim):
-            rvs = norm(loc=0.0, scale=1.0).rvs
-            mat = random(args.s,
-                         int(ratio * args.hosvd_core_dim[0]),
-                         density=args.sparsity,
-                         random_state=args.seed * i,
-                         data_rvs=rvs).A
-            mat = mat / tenpy.vecnorm(mat)
-            # size s x R
-            Q, r = tenpy.qr(mat)
-            factors.append(Q.transpose())
-            rs.append(r)
-        T_core = ttmc(tenpy, T_core, rs, transpose=True)
-        nrm = tenpy.vecnorm(T_core)
-        bias_size = 10
-        bias_dict = dict()
-        for i in range(bias_size):
-            key = tuple([np.random.randint(args.s) for _ in range(args.order)])
-            value = np.random.normal(loc=nrm / bias_size, scale=1.0)
-            if key in bias_dict:
-                bias_dict[key] += value
-            else:
-                bias_dict[key] = value
-        T = Tuckerformat(T_core, factors, tenpy, bias_dict)
+        T = synthetic_tensors.init_rand_bias_sparse_tucker(
+            args.rank_ratio, args.hosvd_core_dim, args.order, tenpy, args.s,
+            args.sparsity, args.seed)
 
-    tenpy.printf("The shape of the input tensor core is: ", T_core.shape)
-    tenpy.printf("The size of the input tensor mode is: ", factors[0].shape[1])
     Regu = args.regularization
 
     if args.hosvd != 0:
