@@ -166,17 +166,18 @@ def bench_sketching_algs(size=200, rank=6, epsilon=0.5, seeds=[1], tensor="rando
 
 if __name__ == "__main__":
     # dense
-    # bench(size=200,
-    #       rank=5,
-    #       epsilon=0.25,
-    #       seeds=[1,2,3,4,5,6,7,8,9,10],
-    #       tensor="random",
-    #       method="Countsketch",
-    #       hosvd=0,
-    #       decomposition="Tucker",
-    #       sparsity=0.5,
-    #       rank_ratio=1.2,
-    #       fix_percentage=0.)
+    bench(size=200,
+          rank=5,
+          epsilon=0.25,
+          seeds=[10],
+          tensor="coil100",
+          method="DT",
+          hosvd=1,
+          decomposition="Tucker",
+          sparsity=0.5,
+          rank_ratio=1.2,
+          fix_percentage=0.,
+          num_iter=10)
 
     bench_sketching_algs(size=1000,
           rank=5,

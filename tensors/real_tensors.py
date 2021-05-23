@@ -104,12 +104,13 @@ def coil_100(tenpy):
 
     if tenpy.name() == 'ctf':
         return tenpy.from_nparray(pixels)
-    return pixels[:, :, :, :]
+    return pixels[:, :, :, 0]#pixels[:, :, :, :]
 
 
 def time_lapse_images(tenpy):
     """
     Time-Lapse Hyperspectral Radiance Images of Natural Scenes 2015
+    Datasets are under the CCBY license (http://creativecommons.org/licenses/by/4.0/).
     References:
         https://personalpages.manchester.ac.uk/staff/d.h.foster/Time-Lapse_HSIs/Time-Lapse_HSIs_2015.html
         Foster, D.H., Amano, K., & Nascimento, S.M.C. (2016). Time-lapse ratios of cone excitations 
@@ -172,7 +173,7 @@ def time_lapse_images(tenpy):
 
     if tenpy.name() == 'ctf':
         return tenpy.from_nparray(pixels)
-    return pixels
+    return pixels[0, :, :, :]
 
 
 def get_scf_tensor(n=15):
