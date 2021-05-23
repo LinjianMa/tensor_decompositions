@@ -21,11 +21,12 @@ def init_rand_tucker(tenpy, ratio, hosvd_core_dim, order, size, seed):
     from tucker.common_kernels import ttmc
     shape = int(ratio * hosvd_core_dim[0]) * np.ones(order).astype(int)
     # T = tenpy.random(shape) - 0.5
-    T = np.random.normal(loc=0., scale=1.0, size=shape)
+    std = 1.0
+    T = np.random.normal(loc=0., scale=std, size=shape)
     A = []
     for i in range(T.ndim):
         mat = np.random.normal(loc=0.0,
-                               scale=1.0,
+                               scale=std,
                                size=(size, int(ratio * hosvd_core_dim[0])))
         Q, _ = tenpy.qr(mat)
         A.append(Q)
@@ -129,6 +130,26 @@ def init_rand_bias_sparse_tucker(ratio, hosvd_core_dim, order, tenpy, size,
 
     tenpy.printf("The shape of the input tensor core is: ", T_core.shape)
     tenpy.printf("The size of the input tensor mode is: ", factors[0].shape[1])
+    return T
+
+
+def init_rand_sparse_cp(ratio, order, tenpy, size, rank, sparsity, seed):
+    from cpd.cp_format import CPformat
+    seed = seed * 1001
+
+    rank_true = int(ratio * rank)
+    rvs = norm(loc=0.0, scale=1.0).rvs
+    factors = []
+    for i in range(order):
+        mat = random(rank_true,
+                     size,
+                     density=sparsity,
+                     random_state=seed * i,
+                     data_rvs=rvs).A
+        mat = mat / tenpy.vecnorm(mat)
+        factors.append(mat)
+    T = CPformat(factors, tenpy)
+    tenpy.printf("The size of the input tensor rank is: ", factors[0].shape[0])
     return T
 
 

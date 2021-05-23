@@ -29,7 +29,7 @@ class DTALS_base():
     def _solve(self, i, Regu, s):
         return
 
-    def step(self, Regu):
+    def step(self, Regu=1e-6):
         self.num_iters_map["dt"] += 1
         t0 = time.time()
 

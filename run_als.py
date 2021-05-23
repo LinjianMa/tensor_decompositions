@@ -185,13 +185,19 @@ def run_als_cpd(args, tenpy, csv_file):
     elif args.tensor == "random":
         tenpy.printf("Testing random tensor")
         sizes = [args.s] * args.order
-        T = synthetic_tensors.init_rand(tenpy, args.order, sizes, args.R,
+        T = synthetic_tensors.init_rand(tenpy, args.order, sizes,
+                                        int(args.R * args.rank_ratio),
                                         args.seed)
     elif args.tensor == "random_bias":
         tenpy.printf("Testing biased random tensor")
         sizes = [args.s] * args.order
         T = synthetic_tensors.init_rand_bias(tenpy, args.order, sizes, args.R,
                                              args.seed)
+    elif args.tensor == "random_tucker":
+        tenpy.printf("Testing random tucker tensor")
+        T = synthetic_tensors.init_rand_tucker(tenpy, args.rank_ratio,
+                                               args.hosvd_core_dim, args.order,
+                                               args.s, args.seed)
     elif args.tensor == "random_col":
         T = synthetic_tensors.init_const_collinearity_tensor(
             tenpy, args.s, args.order, args.R, args.col, args.seed)
@@ -311,14 +317,14 @@ def run_als_tucker_simulate(args, tenpy, csv_file):
 
     assert args.tensor in ["random", "random_bias"]
     if args.tensor == "random":
-        tenpy.printf("Testing random tensor")
+        tenpy.printf("Testing random sparse tensor for tucker simulate")
         T = synthetic_tensors.init_rand_sparse_tucker(args.rank_ratio,
                                                       args.hosvd_core_dim,
                                                       args.order, tenpy,
                                                       args.s, args.sparsity,
                                                       args.seed)
     elif args.tensor == "random_bias":
-        tenpy.printf("Testing random tensor")
+        tenpy.printf("Testing random sparse bias tensor for tucker simulate")
         T = synthetic_tensors.init_rand_bias_sparse_tucker(
             args.rank_ratio, args.hosvd_core_dim, args.order, tenpy, args.s,
             args.sparsity, args.seed)
@@ -342,6 +348,29 @@ def run_als_tucker_simulate(args, tenpy, csv_file):
 
     ret_list = T.Tucker_ALS(A, args.num_iter, args.method, args,
                             args.res_calc_freq)
+    num_iters_map, time_map, pp_init_iter = None, None, None
+
+    if args.backend == "ctf":
+        tepoch.end()
+    return ret_list, num_iters_map, time_map, pp_init_iter
+
+
+def run_als_cp_simulate(args, tenpy, csv_file):
+
+    assert args.tensor in ["random"]
+    if args.tensor == "random":
+        tenpy.printf("Testing random tensor with cp simulate")
+        T = synthetic_tensors.init_rand_sparse_cp(args.rank_ratio, args.order,
+                                                  tenpy, args.s, args.R,
+                                                  args.sparsity, args.seed)
+
+    Regu = args.regularization
+    A = [
+        tenpy.random((args.hosvd_core_dim[i], args.s)) for i in range(T.order)
+    ]
+
+    ret_list = T.CP_ALS(A, args.num_iter, args.method, args,
+                        args.res_calc_freq)
     num_iters_map, time_map, pp_init_iter = None, None, None
 
     if args.backend == "ctf":
@@ -385,6 +414,8 @@ def run_als(args):
         return run_als_tucker(args, tenpy, csv_file)
     elif args.decomposition == "Tucker_simulate":
         return run_als_tucker_simulate(args, tenpy, csv_file)
+    elif args.decomposition == "CP_simulate":
+        return run_als_cp_simulate(args, tenpy, csv_file)
 
 
 if __name__ == "__main__":

@@ -123,6 +123,20 @@ class Tuckerformat(object):
         else:
             return C, None
 
+    def compute_core(self, A):
+        self.inner_factors = [
+            A[i] @ self.outer_factors[i].transpose() for i in range(self.order)
+        ]
+        core = self.tenpy.einsum("abc,da,eb,fc->def", self.T_core,
+                                 self.inner_factors[0], self.inner_factors[1],
+                                 self.inner_factors[2])
+        if self.sparse_dict is not None:
+            for key, val in self.sparse_dict.items():
+                core += val * self.tenpy.einsum("a,b,c->abc", A[0][:, key[0]],
+                                                A[1][:, key[1]], A[2][:,
+                                                                      key[2]])
+        return core
+
     def get_residual(self, A, core=None):
         assert self.order == 3
         t0 = time.time()
@@ -130,15 +144,7 @@ class Tuckerformat(object):
             A[i] @ self.outer_factors[i].transpose() for i in range(self.order)
         ]
         if core is None:
-            core = self.tenpy.einsum("abc,da,eb,fc->def", self.T_core,
-                                     self.inner_factors[0],
-                                     self.inner_factors[1],
-                                     self.inner_factors[2])
-            if self.sparse_dict is not None:
-                for key, val in self.sparse_dict.items():
-                    core += val * self.tenpy.einsum(
-                        "a,b,c->abc", A[0][:, key[0]], A[1][:, key[1]],
-                        A[2][:, key[2]])
+            core = self.compute_core(A)
 
         contract = self.tenpy.einsum("abc,da,eb,fc->def", self.T_core,
                                      self.inner_factors[0],
@@ -172,7 +178,7 @@ class Tuckerformat(object):
             'Countsketch-su':
             Tuckerformat_countsketch_su_Optimizer(self.tenpy, self, A, args)
         }
-        optimizer = optimizer_list[method]
+        self.optimizer = optimizer_list[method]
 
         fitness_old = 0.
         fitness_list = []
@@ -181,7 +187,7 @@ class Tuckerformat(object):
                 if method in ['DT']:
                     res = self.get_residual(A)
                 elif method in ['Leverage', 'Countsketch', 'Countsketch-su']:
-                    res = self.get_residual(A, optimizer.core)
+                    res = self.get_residual(A, self.optimizer.core)
                 fitness = 1 - res / self.normT
                 d_fit = abs(fitness - fitness_old)
                 fitness_old = fitness
@@ -192,7 +198,7 @@ class Tuckerformat(object):
                     ret_list.append([i, res, fitness, d_fit])
 
             t0 = time.time()
-            A = optimizer.step()
+            A = self.optimizer.step()
             t1 = time.time()
             self.tenpy.printf(f"[ {i} ] Sweep took {t1 - t0} seconds")
             time_all += t1 - t0
@@ -314,8 +320,8 @@ class Tuckerformat_ALS_countsketch_base(ALS_countsketch_base):
                     newval = val * rand_signs[0][key_modes[0]] * rand_signs[1][
                         key_modes[1]]
                     newindex = np.mod(
-                        hashed_indices[0][key[0]] + hashed_indices[1][key[1]],
-                        self.sample_size)
+                        hashed_indices[0][key_modes[0]] +
+                        hashed_indices[1][key_modes[1]], self.sample_size)
                     C_bias[key[dim], newindex] = newval
                 sketched_mat_T += C_bias
 
