@@ -3,18 +3,26 @@ import sys
 import time
 
 
-def one_mode_solve(tenpy, lhs, rhs, R, k, core_dims, order):
-    q, r = tenpy.qr(lhs)
-    mod_rhs = tenpy.transpose(q) @ rhs
-    u, s, vt = tenpy.svd(mod_rhs, R)
-    A_core = np.linalg.inv(r) @ u @ tenpy.diag(s) @ vt
+def test_rsvd_accuracy(tenpy, mat, R, oversamp=5):
+    print(mat.shape)
+    U, s, out_A = tenpy.svd(mat, R)
+    Ur, sr, out_Ar = tenpy.rsvd(mat, R, oversamp=oversamp)
+    error = np.linalg.norm(U @ np.diag(s) @ out_A - Ur @ np.diag(sr) @ out_Ar)
+    print(f"The error is {error}")
 
-    # # Not optimal implementation
-    # A_core = self.tenpy.solve(
-    #     self.tenpy.transpose(lhs) @ lhs,
-    #     self.tenpy.transpose(lhs) @ rhs)
+
+def one_mode_solve(tenpy, lhs, rhs, R, k, core_dims, order):
+    # q, r = tenpy.qr(lhs)
+    # mod_rhs = tenpy.transpose(q) @ rhs
+    # u, s, vt = tenpy.svd(mod_rhs, R)
+    # A_core = np.linalg.inv(r) @ u @ tenpy.diag(s) @ vt
+
+    A_core = tenpy.solve(
+        tenpy.transpose(lhs) @ lhs,
+        tenpy.transpose(lhs) @ rhs)
 
     U, s, out_A = tenpy.svd(A_core, R)
+    # test_rsvd_accuracy(tenpy, A_core, R, oversamp=5)
     out_core = (U @ np.diag(s)).reshape(core_dims)
 
     index = list(range(order))
