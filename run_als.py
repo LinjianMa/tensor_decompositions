@@ -179,6 +179,55 @@ def Tucker_ALS(tenpy,
     return ret_list
 
 
+def Tucker_ALS_compare(tenpy,
+                       A,
+                       T,
+                       num_iter,
+                       csv_file=None,
+                       Regu=0.,
+                       method='DT',
+                       args=None,
+                       res_calc_freq=1):
+    from tucker.common_kernels import get_residual
+    from tucker.als import Tucker_DTALS_Optimizer, Tucker_PPALS_Optimizer
+    from tucker.als import Tucker_leverage_Optimizer, Tucker_countsketch_Optimizer, Tucker_countsketch_su_Optimizer
+    import copy
+
+    optimizer_dt = Tucker_DTALS_Optimizer(tenpy, T, A)
+    optimizer_lev = Tucker_leverage_Optimizer(tenpy, T, copy.deepcopy(A), args)
+    optimizer_ts = Tucker_countsketch_Optimizer(tenpy, T, copy.deepcopy(A),
+                                                args)
+    optimizer_tsref = Tucker_countsketch_su_Optimizer(tenpy, T,
+                                                      copy.deepcopy(A), args)
+
+    for i in range(5):
+        optimizer_dt.step()
+        optimizer_lev.step()
+        optimizer_ts.step()
+        optimizer_tsref.step()
+    for i in range(3):
+        projector_nrm = np.linalg.norm(
+            (optimizer_dt.A[i]).T @ optimizer_dt.A[i])
+        projector_diff_nrm = np.linalg.norm(
+            (optimizer_dt.A[i]).T @ optimizer_dt.A[i] -
+            (optimizer_lev.A[i]).T @ optimizer_lev.A[i])
+        print("lev factor norm diff", projector_diff_nrm / projector_nrm)
+    for i in range(3):
+        projector_nrm = np.linalg.norm(
+            (optimizer_dt.A[i]).T @ optimizer_dt.A[i])
+        projector_diff_nrm = np.linalg.norm(
+            (optimizer_dt.A[i]).T @ optimizer_dt.A[i] -
+            (optimizer_ts.A[i]).T @ optimizer_ts.A[i])
+        print("ts factor norm diff", projector_diff_nrm / projector_nrm)
+    for i in range(3):
+        projector_nrm = np.linalg.norm(
+            (optimizer_dt.A[i]).T @ optimizer_dt.A[i])
+        projector_diff_nrm = np.linalg.norm(
+            (optimizer_dt.A[i]).T @ optimizer_dt.A[i] -
+            (optimizer_tsref.A[i]).T @ optimizer_tsref.A[i])
+        print("tsref factor norm diff", projector_diff_nrm / projector_nrm)
+
+
 def run_als_cpd(args, tenpy, csv_file):
     if args.load_tensor is not '':
         T = tenpy.load_tensor_from_file(args.load_tensor + 'tensor.npy')

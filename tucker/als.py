@@ -1,7 +1,7 @@
 import numpy as np
 import queue
 import scipy
-from .common_kernels import n_mode_eigendec, kron_products, count_sketch, matricize_tensor, one_mode_solve
+from .common_kernels import n_mode_eigendec, kron_products, count_sketch, matricize_tensor, one_mode_solve, get_residual
 from cpd.common_kernels import krp
 from als.als_optimizer import DTALS_base, PPALS_base, ALS_leverage_base, ALS_countsketch_base, ALS_countsketch_su_base
 
@@ -15,9 +15,40 @@ class Tucker_leverage_Optimizer(ALS_leverage_base):
     def _solve(self, lhs, rhs, k):
         self.A[k], self.core = one_mode_solve(self.tenpy, lhs, rhs, self.R, k,
                                               self.core_dims, self.order)
+        # self.check_sketching_error(k)
+
+    def check_sketching_error(self, k):
+        Ak, core = self.solve_als(k)
+        normT = self.tenpy.vecnorm(self.T)
+        residual = get_residual(self.tenpy, self.T, self.A, self.core)
+        if k == 0:
+            residual_accurate = get_residual(self.tenpy, self.T,
+                                             [Ak, self.A[1], self.A[2]], core)
+        elif k == 1:
+            residual_accurate = get_residual(self.tenpy, self.T,
+                                             [self.A[0], Ak, self.A[2]], core)
+        else:
+            residual_accurate = get_residual(self.tenpy, self.T,
+                                             [self.A[0], self.A[1], Ak], core)
+        print("error of sketching is",
+              (residual**2 - residual_accurate**2) / residual_accurate**2)
 
     def _form_lhs(self, list_a):
         return kron_products(list_a)
+
+    def solve_als(self, k):
+        s1, s2, s3 = self.T.shape
+        if k == 0:
+            lhs = np.kron(self.A[1], self.A[2]).transpose()
+            rhs = self.T.reshape(s1, s2 * s3).transpose()
+        elif k == 1:
+            lhs = np.kron(self.A[0], self.A[2]).transpose()
+            rhs = self.T.transpose(0, 2, 1).reshape(s1 * s3, s2)
+        else:
+            lhs = np.kron(self.A[0], self.A[1]).transpose()
+            rhs = self.T.reshape(s1 * s2, s3)
+        return one_mode_solve(self.tenpy, lhs, rhs, self.R, k, self.core_dims,
+                              self.order)
 
 
 def kronecker_tensorsketch(tenpy, A, indices, sample_size, hashed_indices,
