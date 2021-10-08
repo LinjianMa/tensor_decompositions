@@ -11,7 +11,8 @@ try:
     FAST_KERNEL = True
 except ImportError:
     pass
-
+if FAST_KERNEL:
+    print("fast kernel enabled")
 
 def name():
     return 'numpy'

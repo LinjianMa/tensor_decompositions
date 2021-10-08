@@ -168,7 +168,7 @@ def run_als(args):
             if (i % res_calc_freq == 0 or i == args.num_iter - 1
                     or not flag_dt):
                 res = tenpy.norm(
-                    T - tenpy.einsum("ka,kb,kc->abc", X, Y, Z)
+                    T - tenpy.einsum("kab,kc->abc", tenpy.einsum("ka,kb->kab", X, Y), Z)
                 )  #get_residual(tenpy, optimizer.mttkrp_last_mode, [X, Y, Z], normT)
                 fitness = 1 - res / normT
                 fitness_diff = abs(fitness - fitness_old)
