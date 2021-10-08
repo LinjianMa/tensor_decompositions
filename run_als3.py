@@ -94,15 +94,17 @@ def run_als(args):
 
     tenpy.printf(f"The shape of the input tensor is: {T.shape}")
 
-    X = tenpy.random((R, T.shape[0])) + 1j * tenpy.random((R, T.shape[0]))
-    Y = tenpy.random((R, T.shape[1])) + 1j * tenpy.random((R, T.shape[1]))
-    Z = tenpy.random((R, T.shape[2])) + 1j * tenpy.random((R, T.shape[2]))
+    X = tenpy.random((R, T.shape[0]))  #+ 1j * tenpy.random((R, T.shape[0]))
+    Y = tenpy.random((R, T.shape[1]))  #+ 1j * tenpy.random((R, T.shape[1]))
+    Z = tenpy.random((R, T.shape[2]))  #+ 1j * tenpy.random((R, T.shape[2]))
 
     optimizer_list = {
         'DT-quad': quad_als_optimizer(tenpy, T, X, Y),
         'PP-quad': quad_pp_optimizer(tenpy, T, X, Y, args),
         'DT': als_optimizer(tenpy, T, X, Y, Z, args),
+        'DT-ELS': als_optimizer(tenpy, T, X, Y, Z, args),
         'PP': als_pp_optimizer(tenpy, T, X, Y, Z, args),
+        'PP-ELS': als_pp_optimizer(tenpy, T, X, Y, Z, args),
     }
     optimizer = optimizer_list[args.method]
 
@@ -148,10 +150,15 @@ def run_als(args):
                 if (i % res_calc_freq == 0):
                     if abs(fitness_diff) <= args.stopping_tol * res_calc_freq:
                         return ret_list, optimizer.num_iters_map, optimizer.time_map, optimizer.pp_init_iter
-        elif args.method == 'PP' or args.method == 'DT':
+        elif args.method == 'PP' or args.method == 'DT' or args.method == 'DT-ELS' or args.method == 'PP-ELS':
             t0 = time.time()
             if args.method == 'PP':
                 X, Y, Z, pp_restart = optimizer.step()
+                flag_dt = not pp_restart
+            elif args.method == "DT-ELS":
+                X, Y, Z = optimizer.step_els()
+            elif args.method == "PP-ELS":
+                X, Y, Z, pp_restart = optimizer.step_els()
                 flag_dt = not pp_restart
             else:
                 X, Y, Z = optimizer.step()
@@ -245,9 +252,11 @@ if __name__ == "__main__":
             'PP',
             'DT-quad',
             'PP-quad',
+            'DT-ELS',
+            'PP-ELS',
         ],
         help=
-        'choose the optimization method: DT, PP, DT-quad, PP-quad (default: DT)'
+        'choose the optimization method: DT, PP, DT-quad, PP-quad, DT-ELS, PP-ELS (default: DT)'
     )
     parser.add_argument('--seed',
                         type=int,
